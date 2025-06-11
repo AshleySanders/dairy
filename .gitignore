@@ -1,0 +1,23 @@
+# Secrets
+.Renviron
+
+# R and RStudio files
+.Rhistory
+.RData
+.Rproj.user/
+.Rproj
+.Ruserdata
+
+# ProjectTemplate generated files
+cache/
+logs/
+graphs/
+
+# Report outputs (optional)
+docs/
+reports/
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
