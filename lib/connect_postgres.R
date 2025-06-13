@@ -1,7 +1,3 @@
-setwd("~/Dropbox/Code/DataSci-R/01-Client-Projects/Cockpit/dairy")
-
-# Load the project
-load.project()
 # Load the necessary libraries
 library(DBI)
 library(RPostgres)
