@@ -38,7 +38,7 @@ lactation_animal <- lactation %>%
             by = c("LacAniId" = "AniId"))
 
 # Cross-tabulate the presence of dry-off date for all of the lactation cycles reported and the animal's status in herd (active/inactive)
-# This will help identify if there are any lactation cycles with missing dry-off dates
+# This will help identify if there are any lactation cycles with missing dry-off dates=
 # Step 1: Filter to all valid lactation cycles
 dryoff_status <- lactation_animal %>%
   filter(LacNumber > 0) %>%
@@ -115,3 +115,63 @@ View(missing_milk_with_exit)
 
 # Save final data set
 write.csv(missing_milk_with_exit, here("data", "missing_milk_with_exit.csv"))
+
+# Identify missing calving date data
+sum(is.na(lactation_animal$LacCalvingDate)) # Total missing calving dates
+
+# Identify cows with missing lactation_length (derived variable) between October 30, 2016 and November 19, 2023
+missing_lactation_length <- lactation_animal %>%
+  filter(LacNumber > 0, is.na(LacDryOffDate), LacCalvingDate > as.Date("2016-10-30") & LacCalvingDate < as.Date("2023-11-19")) %>%
+  select(AniLifeNumber, LacNumber, LacCalvingDate, AniActive) %>%
+  arrange(AniLifeNumber, LacNumber)
+
+# Produce a summary table of cows who should have lactation length data but are missing it
+lactation_animal %>%
+  filter(LacNumber > 0, LacCalvingDate > as.Date("2016-10-30") & LacCalvingDate < as.Date("2023-11-19")) %>%
+  mutate(missing_lactation_length = is.na(lactation_length_days)) %>%
+  group_by(missing_lactation_length, AniActive) %>%
+  summarise(count = n(), .groups = "drop")
+
+# Summary table of cows who should have age at first calving and don't
+lactation_animal %>%
+  filter(LacNumber > 0, LacCalvingDate > as.Date("2016-10-30")) %>%
+  mutate(missing_age_at_first_calving = is.na(age_at_first_calving)) %>%
+  group_by(missing_age_at_first_calving, AniActive) %>%
+  summarise(count = n(), .groups = "drop")
+
+# Identify cows with missing calving to insemination data
+missing_calving_to_insem <- insem_lactation %>%
+  filter(LacNumber > 0, LacCalvingDate > as.Date("2016-10-30")) %>%
+  mutate(missing_calving_to_insem = is.na(calving_to_insem)) %>%
+  group_by(missing_calving_to_insem, AniActive) %>%
+  summarise(count = n(), .groups = "drop")
+
+# --- Identify cows with missing lactation dry-off data
+# Step 1: Identify the last lactation per cow
+last_lactation_per_cow <- insem_lactation %>%
+  group_by(LacAniId) %>%
+  summarise(last_lac = max(LacNumber, na.rm = TRUE), .groups = "drop")
+
+# Step 2: Keep only last insemination per lactation
+insem_last <- insem_lactation %>%
+  group_by(LacAniId, LacNumber) %>%
+  filter(InsNumber == max(InsNumber, na.rm = TRUE)) %>%
+  ungroup()
+
+# Step 3: Join and remove rows corresponding to final lactation
+insem_last_filtered <- insem_last %>%
+  left_join(last_lactation_per_cow, by = "LacAniId") %>%
+  filter(LacNumber < last_lac)  # Exclude final lactation
+
+# Step 4: Apply calving date filter and summarize
+missing_lactation_dry_days <- insem_last_filtered %>%
+  filter(
+    LacNumber > 0,
+    as.Date(LacCalvingDate) > as.Date("2016-10-30"),
+    as.Date(LacCalvingDate) < as.Date("2023-11-19")
+  ) %>%
+  mutate(missing_lactation_dry_days = is.na(next_lactation_dry_days)) %>%
+  group_by(missing_lactation_dry_days, AniActive) %>%
+  summarise(count = n(), .groups = "drop")
+
+print(missing_lactation_dry_days)

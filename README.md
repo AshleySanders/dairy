@@ -80,5 +80,4 @@ dairy/
 
 ## 📜 License
 
-This project is under development. License terms will be defined upon publication or collaboration.
-
+MIT License is open source and free to use with attribution. 

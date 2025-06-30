@@ -1,58 +1,89 @@
-# Data Preparation Scripts: Herd Management Strategy
+# 🧪 Data Preparation Scripts: Herd Management Strategy
 
-This directory contains data processing scripts for preparing structured feature tables used in herd-level strategy and outcome analysis. All scripts follow the [ProjectTemplate](http://projecttemplate.net/) conventions and are organized sequentially.
+This directory contains modular R scripts used to prepare cleaned and structured datasets for cow-level and farm-level herd management strategy analysis. All scripts follow [ProjectTemplate](http://projecttemplate.net/) conventions and are executed in order.
 
 ---
 
-## 📁 Scripts Overview
+## 📁 Script Overview
 
 ### `01_save_sql_tables.R`
-
-- **Purpose**: Extract and prepare core raw data tables from the Lely SQL database for analysis.
+- **Purpose**: Extracts core tables from Lely's SQL database and joins milk production with animal metadata.
 - **Data Sources**:
-  - `PrmMilkDayProduction` – Daily milk production
-  - `HemAnimal` – Animal identity, birthdate, activity flag
-  - `RemLactation` – Lactation cycle metadata
+  - `PrmMilkDayProduction`, `HemAnimal`, `RemLactation`
 - **Output**:
-  - `milk_cows` — A joined table combining milk production and animal identity data  
-  *(Note: This object is stored in memory, not saved to `cache/`)*
-  
+  - `milk_cows` (stored in memory, not saved)
+
 ---
 
-### `02_cow_features_construction.R`
+### `02_reproduction.R`
+- **Purpose**: Prepares reproductive metadata including lactation cycles, insemination records, calving intervals, and early summaries.
+- **Calculations**:
+  - `lactation_length_days`
+  - `age_at_first_calving`
+  - `calving_to_insem`, `next_lactation_dry_days`
+  - `number_lactations`
+- **Sources**:
+  - `RemLactation`, `RemInsemination`, `RemPregnancy`, `HemAnimal`
+- **Output**:
+  - `lactation_animal`, `insem_lactation`, and `unique_cow_summary` in memory
 
-- **Purpose**: Construct a `cow_features` table containing cow-level feature variables from Lely and Supabase data.
-- **Input**: `milk_cows` from previous script (must be run first)
-- **Feature Categories**:
-  - Milk performance: `total_milk`, `avg_daily_milk`, `avg_monthly_milk`, `milk_span_days`, etc.
+---
+
+### `03_calc_lac_interval_dry_off.R`
+- **Purpose**: Calculates dry-off dates and lactation intervals using production gaps > 7 days from Lely milking data.
+- **Key Features Created**:
+  - `dry_off_date`, `dry_off_interval`, `lac_number_calculated`
+  - `still_milking` flag based on last known milking date
+  - Aggregated metrics per cow-lactation cycle:
+    - `total_milk_prod`, `mean_fat_percent`, `milk_production_start_date`, etc.
+- **Joins**:
+  - Calving date + age at first calving from `lactation_animal`
+- **Output**:
+  - `data/lac_calving_calculated.csv`
+
+---
+
+### `04_cow_features_construction.R`
+- **Purpose**: Builds cow-level feature variables from milk, identity, and history data.
+- **Features Included**:
+  - Milk performance: `total_milk`, `avg_daily_milk`, `avg_monthly_milk`
   - Milk quality: `fat_pct_avg`, `protein_pct_avg`
-  - Animal profile: `AniLifeNumber`, `AniGenId`, `AniBirthday`, `birth_year`, `AniActive`
-  - Lifecycle metadata: `entry_date`, `exit_date`, `exit_code`, `slaughter_date`, `weight`
-  - History flags: `has_history_data` (from Supabase)
-- **Join Sources**:
-  - `animals_history` (filtered for Aubépine `customer_id` and dairy race `66`)
-  - `animals_slaughter`
-- **Cleaning Steps**:
-  - Whitespace and format standardization for `AniLifeNumber` joins
-  - Logic fixes: If cow has exit date or slaughter date, `AniActive` is set to `FALSE`
-  - Missing `exit_code` is filled as `"B"` if slaughtered
+  - Animal status: `AniActive`, `birth_year`, `has_history_data`
+  - Lifecycle: `entry_date`, `exit_date`, `slaughter_date`, `exit_code`, `weight`
+- **Joins**:
+  - `animals_history`, `animals_slaughter` (from Supabase)
 - **Output**:
   - `data/cow_features.rds`
 
 ---
 
-## 📌 Notes
-
-- Scripts are modular — run `01_` before `02_`
-- Final output in `cow_features.rds` will be used in downstream profiling and modeling
-- Large intermediate objects (e.g., `milk_cows`) may benefit from being cached to improve reproducibility and performance
+### `05_cow_outcomes_construction.R`
+- **Purpose**: Calculates outcome variables per cow to evaluate herd strategy profitability.
+- **Examples**:
+  - `prod_decline_90d`, `high_yield_flag`, `short_span_flag`, `cohort`
+- **Output**:
+  - `data/cow_outcomes.rds` *(planned)*
 
 ---
 
-## 🛠 Next Steps
+### `GrandLivre_exploration.R`
+- **Purpose**: Initial exploration of accounting ledger data (`gl_entries`) to assess availability of expense and revenue categories.
+- **Outcome**: Determined need for invoice-level API access for meaningful revenue/expense profiling.
 
-- Add new script `03_cow_outcomes_construction.R` to create target variables for strategy analysis
-- Integrate Mil’Klic reproduction data when scraping is complete
-- Summarize herd-level features from `cow_features` for cross-farm comparison
+---
 
+## ✅ Execution Notes
+
+- Run scripts sequentially: `01_` → `02_` → `03_`...
+- `milk_cows`, `lactation_animal`, and other intermediate objects are stored in memory unless explicitly saved
+- For memory-intensive joins, SQL-based joins or filtered extracts may be preferred
+- Reproduction data from Mil’Klic may be integrated in a future step
+
+---
+
+## 📌 To Do
+
+- Finalize `cow_outcomes.rds` with lactation-linked variables
+- Add `farm_profiles.R` script to aggregate features by farm
+- Integrate invoice data once available
 
