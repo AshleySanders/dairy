@@ -151,6 +151,16 @@ lac_calving_calculated <- calving_joined %>%
     by = "AniLifeNumber"
   )
 
+# Create a variable for lactation duration based on milk production start and end dates (NOTE: durations will be short for cows who are still lactating at the time of this data backup)
+
+lac_calving_calculated <- lac_calving_calculated %>%
+  mutate(lactation_duration = as.numeric(milk_production_end_date -
+                                        milk_production_start_date))
+
+# View first few values of lactation_duration variable
+head(lac_calving_calculated$lactation_duration)
+
+
 # lac_calving_calculated is the summary per cow per lactation cycle of the following variables:
 colnames(lac_calving_calculated)
 
@@ -165,6 +175,8 @@ sum(is.na(lac_calving_calculated$dry_off_date))
 sum(is.na(lac_calving_calculated$still_milking))
 sum(is.na(lac_calving_calculated$LacCalvingDate))
 sum(is.na(lac_calving_calculated$age_at_first_calving))
+sum(is.na(lac_calving_calculated$lactation_duration))
+
 
 # Check to ensure there are dry-off intervals for all cows who are not still milking or for whom the lactation cycle is not their last
 missing_dryoff_interval <- lac_calving_calculated %>%

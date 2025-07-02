@@ -187,7 +187,6 @@ unique_cow_summary <- insem_lac_preg %>%
     latest_lactation_date = max(LacCalvingDate, na.rm = TRUE),
     avg_inseminations = mean(!is.na(InsDate), na.rm = TRUE),
     avg_lactation_length_days = mean(lactation_length_days, na.rm = TRUE),
-    avg_colostrum_length_days = mean(colostrum_length_days, na.rm = TRUE),
     avg_calving_to_insem_days = mean(calving_to_insem, na.rm = TRUE),
     avg_next_lactation_dry_days = mean(next_lactation_dry_days, na.rm = TRUE),
     .groups = "drop"
