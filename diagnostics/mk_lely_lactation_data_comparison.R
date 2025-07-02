@@ -22,6 +22,17 @@ length(common_ids)
 length(unique(lac_calving_calculated$AniLifeNumber))
 
 # Double check number of cows for this customer_id in Mil'Klic data
+# Num cows in mk lactations table
+length(unique(mk_animals_lactations$national_number))
+
+# Number of cows in mk_animals_lactations for this customer that should match the Lely database
+mk_customer_cows <- mk_animals_lactations %>%
+  filter(customer_id == "16450bc2-f930-4052-a3f7-a602646e64cc", lactation_number > 0, lactation_start_date < as.Date("2024-09-19")) %>%
+  group_by(national_number) %>%
+  summarise(n_lactations = n(), .groups = "drop")
+
+nrow(mk_customer_cows)
+
 
 
 # Restrict comparison to cows common to both datasets
