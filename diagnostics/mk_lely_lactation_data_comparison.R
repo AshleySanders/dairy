@@ -1,5 +1,44 @@
 # Compare Mil'Klic data with lactation data calculated from Lely Milk Day Production table.
 
+# Lactation cycle number comparison
+
+# Function to clean AniLifeNumber so that it matches the format of national_number/animal from Supabase tables
+clean_ani <- function(x) str_replace_all(str_trim(as.character(x)), " ", "")
+
+lactation_summary_all <- lactation_summary_all %>%
+  mutate(AniLifeNumber = clean_ani(AniLifeNumber))
+
+mk_animals_reproductions_farm1 <- mk_animals_reproductions %>%
+  filter(customer_id == "16450bc2-f930-4052-a3f7-a602646e64cc") %>%
+  mutate(national_number = clean_ani(national_number))
+
+lactation_compare <- lactation_summary_all %>%
+  select(AniLifeNumber, CalculatedLactationCycle, RemLactation_LacNumber) %>%
+  group_by(AniLifeNumber) %>%
+  summarise(
+    max_calc_cycle = max(CalculatedLactationCycle, na.rm = TRUE),
+    max_rem_lacnum = max(RemLactation_LacNumber, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  inner_join(mk_animals_reproductions_farm1 %>% select(national_number, known_lactation = lactation_number), by = c("AniLifeNumber" = "national_number"))
+
+lactation_compare <- lactation_compare %>%
+  mutate(
+    matches_rem = (known_lactation == max_rem_lacnum),
+    matches_calc = (known_lactation == max_calc_cycle)
+  )
+
+summary_table <- lactation_compare %>%
+  summarise(
+    total = n(),
+    match_rem = sum(matches_rem, na.rm = TRUE),
+    match_calc = sum(matches_calc, na.rm = TRUE),
+    both_match = sum(matches_rem & matches_calc, na.rm = TRUE),
+    neither_match = sum(!matches_rem & !matches_calc, na.rm = TRUE)
+  )
+
+summary_table
+
 # --- Ensure AniLifeNumber from Lely data is cleaned so it matches national_number from the Supabase Mil'Klic tables. ---
 lac_calving_calculated <- lac_calving_calculated %>%
   mutate(AniLifeNumber = str_replace_all(str_trim(as.character(AniLifeNumber)), "\\s+", ""))

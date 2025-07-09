@@ -18,7 +18,7 @@ cow_features <- readRDS(here::here("data", "cow_features.rds"))
 
 # Pull in information that comes from the cow_features table
 cow_outcomes <- cow_features %>%
-  select(AniLifeNumber, avg_daily_milk, milk_span_days, birth_year)
+  select(AniLifeNumber, avg_daily_milk_liters, avg_lactation_duration, birth_year)
 
 # Add a high_yield_flag based on the top 25% of avg_daily_milk
 cow_outcomes <- cow_outcomes %>%
@@ -26,10 +26,10 @@ cow_outcomes <- cow_outcomes %>%
 
 # Add a short span flag based on milk_span_days
 cow_outcomes <- cow_outcomes %>%
-  mutate(short_span_flag = milk_span_days < 305)
+  mutate(short_span_flag = avg_lactation_duration < 305)
 
 
-# Calculate the lifetime total milk and average monthy milk produced (in liters) per cow
+# Calculate the lifetime total milk and average monthly milk produced (in liters) per cow based on conserved milk (Oct 2020-Aug 2024 and estimates for kept milk prior to Oct 2020)
 milk_prod_summary_by_cow <- full_milk_by_cow %>%
   group_by(AniLifeNumber) %>%
   summarise(
@@ -40,7 +40,7 @@ milk_prod_summary_by_cow <- full_milk_by_cow %>%
 
 
 # Calculate prod_decline_90d as the drop in milk between first 30 days and following 60 days
-# ---- NOTE: Waiting on Mil'Klic data.
+
 
 
 # Join everything into cow_outcomes

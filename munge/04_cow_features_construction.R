@@ -17,42 +17,44 @@ library(stringr)
 # Function to clean AniLifeNumber so that it matches the format of national_number/animal from Supabase tables
 clean_ani <- function(x) str_replace_all(str_trim(as.character(x)), " ", "")
 
-lactation_summary <- read.csv(here("data", "lactation_summary.csv"))
+lactation_summary_post2018 <- read.csv(here("data", "lactation_summary_post2018_11_01.csv"))
 
 # Calculate summarize lactation cycle data per cow
 
-lactation_summary_by_cow <- lactation_summary %>%
+lactation_summary_by_cow_post2018 <- lactation_summary_post2018 %>%
+  mutate(
+    milk_production_end_date = as.Date(milk_production_end_date),
+    milk_production_start_date = as.Date(milk_production_start_date),
+    lactation_duration = as.numeric(milk_production_end_date - milk_production_start_date)) %>%
   group_by(AniLifeNumber) %>%
   summarise(
     number_lactations = max(pmax(RemLactation_LacNumber, CalculatedLactationCycle, na.rm = TRUE), na.rm = TRUE),
+    avg_lactation_duration = mean(lactation_duration, na.rm = TRUE),
+    still_milking = any(still_milking == TRUE),
        .groups = "drop"
   )
 
-lactation_summary_by_cow <- lactation_summary_by_cow %>%
+lactation_summary_by_cow_post2018 <- lactation_summary_by_cow_post2018 %>%
   mutate(AniLifeNumber = clean_ani(AniLifeNumber))
 
 # Identify cows that appear in lactation_summary_by_cow who should be included in the features table
-valid_cows <- unique(lactation_summary_by_cow$AniLifeNumber)
+valid_cows <- unique(lactation_summary_by_cow_post2018$AniLifeNumber)
 
 # Calculate average length of dry off period based on full data set, including cycles that occurrred prior to November 2018
 lactation_summary_all <- read.csv(here("data", "lactation_summary_all.csv"))
 
 # Convert dry_off_interval to numeric, filter to valid values for the full lactation summary data set
-lactation_summary_all <- lactation_summary_all %>%
+
+lactation_intervals_per_cow <- lactation_summary_all %>%
   mutate(dry_off_interval_num = as.numeric(dry_off_interval)) %>%
   filter(!is.na(dry_off_interval_num)) %>%   # exclude last cycle (no following start date)
+  mutate(AniLifeNumber = clean_ani(AniLifeNumber)) %>%
   group_by(AniLifeNumber) %>%
   summarise(
-      avg_dry_interval = mean(dry_off_interval_num, na.rm = TRUE),
-      .groups = "drop")
-
-lactation_summary_all <- lactation_summary_all %>%
-  mutate(AniLifeNumber = clean_ani(AniLifeNumber))
-
-lactation_summary_all <- lactation_summary_all %>%
-  group_by(AniLifeNumber) %>%
-  mutate(n_intervals = n()) %>%
-  ungroup()
+    avg_dry_interval = mean(dry_off_interval_num, na.rm = TRUE),
+    n_intervals = n(),
+    .groups = "drop"
+  )
 
 
 
@@ -77,11 +79,10 @@ cow_milk_summary <- milk_cows %>%
   ) %>%
   group_by(AniLifeNumber, has_history_data) %>%
   summarise(
-    avg_daily_milk = mean(MdpDayProduction, na.rm = TRUE) / 1.03, # convert to liters
-    milk_span_days = as.numeric(max(MdpProductionDate, na.rm = TRUE) - min(MdpProductionDate, na.rm = TRUE)),
+    avg_daily_milk_liters = mean(MdpDayProduction, na.rm = TRUE) / 1.03, # convert to liters
     avg_milkings_per_day = mean(MdpMilkings, na.rm = TRUE),
-    fat_pct_avg = mean(MdpFatPercentage, na.rm = TRUE),
-    protein_pct_avg = mean(MdpProteinPercentage, na.rm = TRUE),
+    avg_fat_pct = mean(MdpFatPercentage, na.rm = TRUE),
+    avg_protein_pct = mean(MdpProteinPercentage, na.rm = TRUE),
     .groups = "drop"
   )
 
@@ -115,14 +116,14 @@ slaughter_cleaned <- animals_slaughter %>%
 
 # Join everything into cow_features ---
 cow_features <- cow_milk_summary %>%
-  mutate(AniLifeNumber = ani_clean(AniLifeNumber))
+  mutate(AniLifeNumber = clean_ani(AniLifeNumber)) %>%
   filter(!is.na(AniLifeNumber), AniLifeNumber != "",
          AniLifeNumber %in% valid_cows) %>%
   left_join(cow_identity, by = "AniLifeNumber") %>%
   left_join(animals_meta_farm1, by = c("AniLifeNumber" = "animal")) %>%
   left_join(slaughter_cleaned, by = c("AniLifeNumber" = "national_number")) %>%
-  left_join(lactation_summary_by_cow, by = "AniLifeNumber") %>%
-  left_join(lactation_summary_all, by = "AniLifeNumber") %>%
+  left_join(lactation_summary_by_cow_post2018, by = "AniLifeNumber") %>%
+  left_join(lactation_intervals_per_cow, by = "AniLifeNumber") %>%
   mutate(
     birth_year = year(AniBirthday),
     AniActive = if_else(!is.na(exit_date), FALSE, AniActive),
@@ -142,17 +143,13 @@ cow_features <- cow_features %>%
 cow_features <- cow_features %>%
   mutate(cohort = case_when(
     birth_year < 2016 ~ "pre-2016",
-    birth_year >= 2016 & birth_year <= 2018 ~ "2016–2018",
-    birth_year >= 2019 & birth_year <= 2021 ~ "2019–2021",
+    birth_year >= 2016 & birth_year <= 2018 ~ "2016-2018",
+    birth_year >= 2019 & birth_year <= 2021 ~ "2019-2021",
     birth_year >= 2022 ~ "2022+"
   ))
 
 # Create flag for missing dry interval data
 cow_features <- cow_features %>%
-  left_join(
-    lactation_summary_all %>% select(AniLifeNumber, n_intervals) %>% distinct(),
-    by = "AniLifeNumber"
-  ) %>%
   mutate(
     dry_interval_missing_reason = case_when(
       is.na(avg_dry_interval) & n_intervals == 1 ~ "Only 1 lactation",
