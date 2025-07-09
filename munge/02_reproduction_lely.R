@@ -2,34 +2,7 @@ library(dplyr)
 library(lubridate)
 library(tidyr)
 
-lactation_data <- dbGetQuery(lely, "
-  SELECT LacId, LacAniId, LacNumber, LacDryOffDate, LacCalvingDate, LacColostrumDate, LacRemarks
-  FROM RemLactation
-  ORDER BY LacAniId, LacNumber
-")
-
-lactation_animal <- dbGetQuery(lely, "
-  SELECT
-    RemLactation.LacId,
-    RemLactation.LacAniId,
-    RemLactation.LacNumber,
-    RemLactation.LacDryOffDate,
-    RemLactation.LacCalvingDate,
-    RemLactation.LacColostrumDate,
-    RemLactation.LacRemarks,
-    HemAnimal.AniLifeNumber,
-    HemAnimal.AniBirthday,
-    HemAnimal.AniKeep,
-    HemAnimal.AniGenId,
-    HemAnimal.AniActive,
-    HemAnimal.AniMotherLifeNumber
-  FROM RemLactation
-  INNER JOIN HemAnimal
-    ON HemAnimal.AniId = RemLactation.LacAniId
-  ORDER BY HemAnimal.AniId
-")
-
-
+# Run munge/01_save_sql_tables.R to load the Lely SQL tables
 
 # Convert date columns to Date type
 lactation_animal <- lactation_animal %>%

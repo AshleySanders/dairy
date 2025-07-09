@@ -57,6 +57,67 @@ milk_cows <- milk_all %>%
     by = c("MdpAniId" = "AniId")
   )
 
+
+# Join lactation data from Lely with animal metadata
+lactation_animal <- dbGetQuery(lely, "
+  SELECT
+    RemLactation.LacId,
+    RemLactation.LacAniId,
+    RemLactation.LacNumber,
+    RemLactation.LacDryOffDate,
+    RemLactation.LacCalvingDate,
+    RemLactation.LacColostrumDate,
+    RemLactation.LacRemarks,
+    HemAnimal.AniLifeNumber,
+    HemAnimal.AniBirthday,
+    HemAnimal.AniKeep,
+    HemAnimal.AniGenId,
+    HemAnimal.AniActive,
+    HemAnimal.AniMotherLifeNumber
+  FROM RemLactation
+  INNER JOIN HemAnimal
+    ON HemAnimal.AniId = RemLactation.LacAniId
+  ORDER BY HemAnimal.AniId
+")
+
+# Save animals_history table from Supabase for later use
+
+animals_history <- dbGetQuery(prod, "
+  SELECT
+  	animal,
+		category,
+		customer_id,
+		date,
+		entry_code,
+		entry_date,
+		exit_code,
+		exit_date,
+		month,
+		year
+	FROM animals_history
+	ORDER BY animal")
+
+animals <- dbGetQuery(prod, "
+  SELECT
+    birth_date,
+    country_code,
+    national_number,
+    race
+  FROM animals
+  ORDER BY national_number")
+
+animals_meta <- animals_history %>%
+  left_join(animals, by = c("animal" = "national_number"))
+
+# Save animals_slaughter table from Supabase for later use
+animals_slaughter <- dbGetQuery(prod, "
+  SELECT
+    national_number,
+    date,
+    weight
+  FROM animals_slaughter
+  ORDER BY national_number, date")
+
 # --- Save Mil'Klic tables from Supabase, denoted by "mk_" prefix to table names here ---
 
 mk_animals_lactations <- dbGetQuery(prod, "
