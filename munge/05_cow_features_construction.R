@@ -28,6 +28,8 @@ cow_milk_summary <- milk_cows %>%
     .groups = "drop"
   )
 
+#
+
 # Add year-month column to milk data
 monthly_production <- milk_cows %>%
   mutate(
@@ -84,6 +86,7 @@ cow_features <- cow_milk_summary %>%
   left_join(cow_identity, by = "AniLifeNumber") %>%
   left_join(animals_history_cleaned, by = c("AniLifeNumber" = "animal")) %>%
   left_join(slaughter_cleaned, by = c("AniLifeNumber" = "national_number"))
+
 
 # Optional final cleanup ---
 cow_features <- cow_features %>%

@@ -130,3 +130,47 @@ mk_animals_reproductions_events <- dbGetQuery(prod, "
 	  days_since_last_insem
   FROM animals_reproductions_events
 ")
+
+# --- Supabase Tables ---
+gl_entries <- dbGetQuery(prod, "
+  SELECT
+    journal,
+		identifier,
+		date,
+		counterpart,
+		label,
+		number,
+		quantity,
+		unit_price,
+		debit,
+		credit,
+		balance,
+		gl_account_number,
+		customer_id,
+		balance_num,
+		start_fiscal_year,
+		end_fiscal_year,
+		document_id,
+		invoice_id
+	FROM gl_entries")
+
+# Grand Livre entries for the first farm in the analysis
+
+gl_entries_farm1 <- dbGetQuery(prod, "
+  SELECT
+    *
+  FROM
+    gl_entries
+  WHERE
+    customer_id = '16450bc2-f930-4052-a3f7-a602646e64cc'
+  ORDER BY
+    date DESC")
+
+head(gl_entries_farm1$label)
+# Check the unique labels to understand what types of entries we have
+unique(gl_entries_farm1$label)
+
+# Exploring sales data for farm 1
+
+farm1_gl_credits <- gl_entries_farm1 %>%
+  filter(!is.na(credit), credit > 0)

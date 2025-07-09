@@ -43,7 +43,14 @@ This directory contains modular R scripts used to prepare cleaned and structured
 
 ---
 
-### `04_cow_features_construction.R`
+### `04_mdp_visit_monthly_milk_prod_by_cow.R`
+- **Purpose**: Used to determine that the monthly milk production by cow data from PrmMilkDayProduction includes discarded milk after comparing it with a joined dataset (MilkVisit * DeviceVisit) that calculates conserved milk. Then, this script does a vertical join between MDP estimates based on a calculated ratio of 0.959 of kept to total milk produced for dates prior to November 2020, when the MilkVisit * DeviceVisit data begins.
+- **Output**:
+  - `full_milk_by_cow`
+  
+---
+
+### `05_cow_features_construction.R`
 - **Purpose**: Builds cow-level feature variables from milk, identity, and history data.
 - **Features Included**:
   - Milk performance: `total_milk`, `avg_daily_milk`, `avg_monthly_milk`
@@ -57,7 +64,7 @@ This directory contains modular R scripts used to prepare cleaned and structured
 
 ---
 
-### `05_cow_outcomes_construction.R`
+### `06_cow_outcomes_construction.R`
 - **Purpose**: Calculates outcome variables per cow to evaluate herd strategy profitability.
 - **Examples**:
   - `prod_decline_90d`, `high_yield_flag`, `short_span_flag`, `cohort`
