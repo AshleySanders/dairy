@@ -11,6 +11,10 @@ library(stringr)
 # ---Data
 # Use the milk_cows table already created in munge/01_save_sql_tables.R. This table is a join between MilkDayProduction table from Lely and HemAnimal table from Lely.
 
+# Load lactation summary data generated in SQL
+# This summary only includes milking cycles that began after 2018-11-01 so that the invoice data matches and we have the full lactation cycle data for each cow for each cycle listed.
+lactation_summary <- read.csv(here("data", "lactation_summary.csv"))
+
 # Aggregate daily milk data per cow
 cow_milk_summary <- milk_cows %>%
   mutate(
@@ -19,31 +23,11 @@ cow_milk_summary <- milk_cows %>%
   ) %>%
   group_by(AniLifeNumber, has_history_data) %>%
   summarise(
-    total_milk = sum(MdpDayProduction, na.rm = TRUE),
-    avg_daily_milk = mean(MdpDayProduction, na.rm = TRUE),
+    avg_daily_milk = mean(MdpDayProduction, na.rm = TRUE) / 1.03, # convert to liters
     milk_span_days = as.numeric(max(MdpProductionDate, na.rm = TRUE) - min(MdpProductionDate, na.rm = TRUE)),
     avg_milkings_per_day = mean(MdpMilkings, na.rm = TRUE),
     fat_pct_avg = mean(MdpFatPercentage, na.rm = TRUE),
     protein_pct_avg = mean(MdpProteinPercentage, na.rm = TRUE),
-    .groups = "drop"
-  )
-
-#
-
-# Add year-month column to milk data
-monthly_production <- milk_cows %>%
-  mutate(
-    AniLifeNumber = str_replace_all(str_trim(as.character(AniLifeNumber)), " ", ""),
-    year_month = format(as.Date(MdpProductionDate), "%Y-%m")
-  ) %>%
-  group_by(AniLifeNumber, year_month) %>%
-  summarise(
-    monthly_total = sum(MdpDayProduction, na.rm = TRUE),
-    .groups = "drop"
-  ) %>%
-  group_by(AniLifeNumber) %>%
-  summarise(
-    avg_monthly_milk = mean(monthly_total, na.rm = TRUE),
     .groups = "drop"
   )
 
@@ -81,22 +65,34 @@ slaughter_cleaned <- animals_slaughter %>%
 
 # Join everything into cow_features ---
 cow_features <- cow_milk_summary %>%
-  filter(!is.na(AniLifeNumber), AniLifeNumber != "") %>% # Remove empty strings too
-  left_join(monthly_production, by = "AniLifeNumber") %>%
+  filter(!is.na(AniLifeNumber), AniLifeNumber != "") %>%
   left_join(cow_identity, by = "AniLifeNumber") %>%
   left_join(animals_history_cleaned, by = c("AniLifeNumber" = "animal")) %>%
-  left_join(slaughter_cleaned, by = c("AniLifeNumber" = "national_number"))
-
-
-# Optional final cleanup ---
-cow_features <- cow_features %>%
+  left_join(slaughter_cleaned, by = c("AniLifeNumber" = "national_number")) %>%
+  left_join(
+    lactation_animal %>% select(AniLifeNumber, age_at_first_calving) %>% distinct(),
+    by = "AniLifeNumber"
+  ) %>%
   mutate(
     birth_year = year(AniBirthday),
-    # Update active status based on exit_date
     AniActive = if_else(!is.na(exit_date), FALSE, AniActive),
-    exit_date = if_else(is.na(exit_date) & !is.na(slaughter_date), slaughter_date, exit_date),
-    exit_code = if_else(is.na(exit_code) & !is.na(slaughter_date), "B", exit_code)
-    )
+    exit_date = coalesce(exit_date, slaughter_date),
+    exit_code = if_else(is.na(exit_code) & !is.na(slaughter_date), "B", exit_code),
+    age_at_exit_days = as.numeric(exit_date - AniBirthday)
+  )
+
+# Join age_at_first_calving (regular left join)
+lac_calving_calculated <- calving_joined %>%
+
+
+# Create cohorts
+cow_features <- cow_features %>%
+  mutate(cohort = case_when(
+    birth_year < 2016 ~ "pre-2016",
+    birth_year >= 2016 & birth_year <= 2018 ~ "2016-2018",
+    birth_year > 2018 ~ "post-2019"
+  ))
+
 
 # Save or View the result ---
 saveRDS(cow_features, file = here::here("data", "cow_features.rds"))

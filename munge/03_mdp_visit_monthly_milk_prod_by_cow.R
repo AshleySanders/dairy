@@ -103,10 +103,7 @@ mdp_estimates <- mdp_estimates %>%
          Month = ceiling_date(Month, "month") - days(1))
 
 visit <- visit %>%
-  filter(!is.na(Month), Month != "NULL", Month != "") %>%
-  mutate(Month = paste0(Month, "-01"),
-         Month = ymd(Month),
-         Month = ceiling_date(Month, "month") - days(1))
+  mutate(Month = ceiling_date(Month, "month") - days(1))
 
 # Examine the column names and data types for each table
 colnames(mdp_estimates)
@@ -121,3 +118,7 @@ mdp_estimates <- mdp_estimates %>%
 
 # Create full monthly milk production dataset by cow with the actual values of conserved milk (November 2020 - August 2024) and the estimates prior to November 2020.
 full_milk_by_cow <- bind_rows(mdp_estimates, visit)
+
+View(full_milk_by_cow)
+
+write.csv(full_milk_by_cow, here("data", "full_monthly_milk_prod_by_cow.csv"))

@@ -1,6 +1,4 @@
-setwd("~/Dropbox/Code/DataSci-R/01-Client-Projects/Cockpit/dairy")
+library(here)
 library(ProjectTemplate)
 load.project()
 
-library(here)
-here()

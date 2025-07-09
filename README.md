@@ -16,9 +16,9 @@ This project analyzes dairy herd productivity and lifecycle patterns using milki
 
 ---
 
-## 📁 Project Structure (ProjectTemplate format)
+<pre>## 📁 Project Structure (ProjectTemplate format)
 
-dairy/
+```dairy/
 ├── data/ # Final output datasets (e.g., cow_features.rds)
 ├── cache/ # Intermediate .rds objects for performance
 ├── munge/ # Scripts to load, clean, and engineer data
@@ -27,7 +27,7 @@ dairy/
 ├── reports/ # Future reporting and visualization outputs
 ├── src/ # Optional: helper functions
 ├── README.md # Project overview (this file)
-└── .Rproj # RStudio project file
+└── .Rproj # RStudio project file```</pre>
 
 
 ---

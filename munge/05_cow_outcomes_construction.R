@@ -10,6 +10,7 @@ library(stringr)
 
 # ---Data
 # Use the milk_cows table already created in munge/01_save_sql_tables.R. This table is a join between MilkDayProduction table from Lely and HemAnimal table from Lely.
+# Use the full_milk_by_cow table, which calculates the monthly milk production that is conserved for each cow.
 
 # Load the cow_features table created in munge/02_cow_features_construction.R
 cow_features <- readRDS(here::here("data", "cow_features.rds"))
@@ -27,16 +28,25 @@ cow_outcomes <- cow_outcomes %>%
 cow_outcomes <- cow_outcomes %>%
   mutate(short_span_flag = milk_span_days < 305)
 
-cow_outcomes <- cow_outcomes %>%
-  mutate(cohort = case_when(
-    birth_year < 2016 ~ "pre-2016",
-    birth_year >= 2016 & birth_year <= 2018 ~ "2016-2018",
-    birth_year > 2018 ~ "post-2019"
-  ))
+
+# Calculate the lifetime total milk and average monthy milk produced (in liters) per cow
+milk_prod_summary_by_cow <- full_milk_by_cow %>%
+  group_by(AniLifeNumber) %>%
+  summarise(
+    total_milk_liters = sum(MonthlyMilkYield_Liters, na.rm = TRUE),
+    avg_monthly_milk = mean(MonthlyMilkYield_Liters, na.rm = TRUE),
+    .groups = "drop"
+  )
+
 
 # Calculate prod_decline_90d as the drop in milk between first 30 days and following 60 days
 # ---- NOTE: Waiting on Mil'Klic data.
 
+
+# Join everything into cow_outcomes
+
+cow_outcomes <- cow_outcomes %>%
+  left_join(milk_prod_summary_by_cow, by = "AniLifeNumber")
 
 # Save or View the result ---
 saveRDS(cow_outcomes, file = here::here("data", "cow_outcomes.rds"))

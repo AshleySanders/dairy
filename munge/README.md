@@ -29,28 +29,14 @@ This directory contains modular R scripts used to prepare cleaned and structured
 
 ---
 
-### `03_calc_lac_interval_dry_off.R`
-- **Purpose**: Calculates dry-off dates and lactation intervals using production gaps > 7 days from Lely milking data.
-- **Key Features Created**:
-  - `dry_off_date`, `dry_off_interval`, `lac_number_calculated`
-  - `still_milking` flag based on last known milking date
-  - Aggregated metrics per cow-lactation cycle:
-    - `total_milk_prod`, `mean_fat_percent`, `milk_production_start_date`, etc.
-- **Joins**:
-  - Calving date + age at first calving from `lactation_animal`
-- **Output**:
-  - `data/lac_calving_calculated.csv`
-
----
-
-### `04_mdp_visit_monthly_milk_prod_by_cow.R`
+### `03_mdp_visit_monthly_milk_prod_by_cow.R`
 - **Purpose**: Used to determine that the monthly milk production by cow data from PrmMilkDayProduction includes discarded milk after comparing it with a joined dataset (MilkVisit * DeviceVisit) that calculates conserved milk. Then, this script does a vertical join between MDP estimates based on a calculated ratio of 0.959 of kept to total milk produced for dates prior to November 2020, when the MilkVisit * DeviceVisit data begins.
 - **Output**:
   - `full_milk_by_cow`
   
 ---
 
-### `05_cow_features_construction.R`
+### `04_cow_features_construction.R`
 - **Purpose**: Builds cow-level feature variables from milk, identity, and history data.
 - **Features Included**:
   - Milk performance: `total_milk`, `avg_daily_milk`, `avg_monthly_milk`
@@ -64,7 +50,7 @@ This directory contains modular R scripts used to prepare cleaned and structured
 
 ---
 
-### `06_cow_outcomes_construction.R`
+### `05_cow_outcomes_construction.R`
 - **Purpose**: Calculates outcome variables per cow to evaluate herd strategy profitability.
 - **Examples**:
   - `prod_decline_90d`, `high_yield_flag`, `short_span_flag`, `cohort`
@@ -73,11 +59,6 @@ This directory contains modular R scripts used to prepare cleaned and structured
 
 ---
 
-### `GrandLivre_exploration.R`
-- **Purpose**: Initial exploration of accounting ledger data (`gl_entries`) to assess availability of expense and revenue categories.
-- **Outcome**: Determined need for invoice-level API access for meaningful revenue/expense profiling.
-
----
 
 ## ✅ Execution Notes
 
