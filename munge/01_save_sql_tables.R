@@ -80,6 +80,38 @@ lactation_animal <- dbGetQuery(lely, "
   ORDER BY HemAnimal.AniId
 ")
 
+# Get insemination data
+insemination <- dbGetQuery(lely, "
+  SELECT
+    RemInsemination.*,
+    HemAnimal.AniLifeNumber,
+    HemAnimal.AniBirthday,
+    HemAnimal.AniKeep,
+    HemAnimal.AniGenId,
+    HemAnimal.AniActive,
+    HemAnimal.AniMotherLifeNumber
+  FROM RemInsemination
+  INNER JOIN RemLactation
+    ON RemLactation.LacId = RemInsemination.InsLacId
+  INNER JOIN HemAnimal
+    ON HemAnimal.AniId = RemLactation.LacAniId
+  ORDER BY HemAnimal.AniId
+")
+
+
+# Convert date columns to Date type
+insemination <- insemination %>%
+  mutate(
+    AniBirthday = as.Date(AniBirthday, format = "%Y-%m-%d"),
+    InsDate = as.Date(InsDate, format = "%Y-%m-%d")
+  )
+
+# Get pregnancy data
+pregnancy <- dbGetQuery(lely, "
+    SELECT PreLacId, PreDate, PreInsId, PreRemark
+    FROM RemPregnancy
+")
+
 # Save animals_history table from Supabase for later use
 
 animals_history <- dbGetQuery(prod, "

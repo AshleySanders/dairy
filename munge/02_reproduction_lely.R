@@ -1,166 +1,142 @@
+# ------------------------------------------------------------------------------
+# Script Name:    02_reproduction.R
+# Project:        Cockpit Agriculture – Herd Management Strategy
+# Purpose:        Join insemination, lactation, and pregnancy data to create a
+#                 clean, de-duplicated dataset for reproductive event analysis.
+#
+# Description:    This script prepares cow-level reproductive records by:
+#                 - Cleaning identifiers and date fields
+#                 - Attaching lactation IDs to validated calving events
+#                 - Joining insemination records to lactations
+#                 - Matching pregnancies to inseminations (deduping on PreDate)
+#                 - Flagging each insemination as successful (if confirmed)
+#                 - Flagging pregnancies as successful (if result in calving)
+#
+# Inputs:
+#   - Lely SQL tables: RemInsemination, RemPregnancy, RemLactation (for LacId)
+#   - data/lactation_summary_all.csv (validated summary from SQL)
+#
+# Outputs:
+#   - data/insem_lac_preg.rds: Cleaned, deduplicated, and flagged dataset
+#   - data/insem_lac_preg.csv: Exported copy for inspection or sharing
+#
+# Author:         Ashley Sanders
+# Created:        2025-06-19
+# Last updated:   2025-07-10
+# ------------------------------------------------------------------------------
+
+
+# Load libraries
 library(dplyr)
 library(lubridate)
-library(tidyr)
+library(tidyverse)
+library(stringr)
 
 # Run munge/01_save_sql_tables.R to load the Lely SQL tables
 
-# Convert date columns to Date type
-lactation_animal <- lactation_animal %>%
-mutate(
-  LacDryOffDate = as.Date(LacDryOffDate, format = "%Y-%m-%d"),
-  LacCalvingDate = as.Date(LacCalvingDate, format = "%Y-%m-%d"),
-  LacColostrumDate = as.Date(LacColostrumDate, format = "%Y-%m-%d"),
-  AniBirthday = as.Date(AniBirthday, format = "%Y-%m-%d"))
+# Data: insemination table from Lely (run 01_save_sql_tables.R)
+# Data: Use lactation_summary_all generated from SQL ---
 
-# Calculate lactation length in days
-lactation_animal <- lactation_animal %>%
-  mutate(
-    lactation_length_days = case_when(
-      LacNumber > 0 ~ as.numeric(LacDryOffDate - LacCalvingDate),
-      TRUE ~ NA_real_
-    )
-  )
+lactation_summary_all <- read.csv(here("data", "lactatation_summary_all.csv"))
 
+# Function to clean AniLifeNumber so that it matches the format of national_number/animal from Supabase tables
+clean_ani <- function(x) str_replace_all(str_trim(as.character(x)), " ", "")
 
-# Calculate age of cow at first calving
-first_calving <- lactation_animal %>%
-  filter(LacNumber == 1, !is.na(AniBirthday), !is.na(LacCalvingDate)) %>%
-  group_by(AniLifeNumber) %>%
-  slice_min(LacCalvingDate, with_ties = FALSE) %>%
-  summarise(
-    age_at_first_calving = interval(AniBirthday, LacCalvingDate) %/% months(1),
-    .groups = "drop"
-  )
+lactation_summary_all <- lactation_summary_all %>%
+  mutate(AniLifeNumber = clean_ani(AniLifeNumber),
+         LacAniId = clean_ani(CowID),
+         LacCalvingDate = as.Date(LacCalvingDate)) %>%
+  select(-CowID)
 
-lactation_animal <- lactation_animal %>%
-  left_join(first_calving, by = "AniLifeNumber")
+insemination <- insemination %>%
+  mutate(AniLifeNumber = clean_ani(AniLifeNumber),
+         InsDate = as.Date(InsDate))
 
-View(lactation_animal)
+lactation_data_clean <- lactation_data %>%
+  mutate(LacAniId = clean_ani(LacAniId),
+         LacCalvingDate = as.Date(LacCalvingDate))
 
-summary(lactation$LacDryOffDate)
+pregnancy <- pregnancy %>%
+  mutate(PreDate = as.Date(PreDate))
 
-
-# Get pregnancy data
-pregnancy <- dbGetQuery(lely, "
-    SELECT PreLacId, PreDate, PreInsId, PreRemark
-    FROM RemPregnancy
-")
-
-# Get insemination data
-insem_lactation <- dbGetQuery(lely, "
-  SELECT
-    RemInsemination.*,
-    RemLactation.LacAniId,
-    RemLactation.LacCalvingDate,
-    RemLactation.LacNumber,
-    RemLactation.LacDryOffDate,
-    RemLactation.LacColostrumDate,
-    RemLactation.LacRemarks,
-    HemAnimal.AniLifeNumber,
-    HemAnimal.AniBirthday,
-    HemAnimal.AniKeep,
-    HemAnimal.AniGenId,
-    HemAnimal.AniActive,
-    HemAnimal.AniMotherLifeNumber
-  FROM RemInsemination
-  INNER JOIN RemLactation
-    ON RemLactation.LacId = RemInsemination.InsLacId
-  INNER JOIN HemAnimal
-    ON HemAnimal.AniId = RemLactation.LacAniId
-  ORDER BY HemAnimal.AniId
-")
-
-
-# Convert date columns to Date type
-insem_lactation <- insem_lactation %>%
-  mutate(
-    LacDryOffDate = as.Date(LacDryOffDate, format = "%Y-%m-%d"),
-    LacCalvingDate = as.Date(LacCalvingDate, format = "%Y-%m-%d"),
-    LacColostrumDate = as.Date(LacColostrumDate, format = "%Y-%m-%d"),
-    AniBirthday = as.Date(AniBirthday, format = "%Y-%m-%d"),
-    InsDate = as.Date(InsDate, format = "%Y-%m-%d")
-  )
-
-
-# Calculate lactation length in days
-insem_lactation <- insem_lactation %>%
-  mutate(
-    lactation_length_days = case_when(
-      LacNumber > 0 ~ as.numeric(LacDryOffDate - LacCalvingDate),
-      TRUE ~ NA_real_
-    )
-  )
-# Calculate age of cow at first calving
-first_calving <- insem_lactation %>%
-  filter(LacNumber == 1, !is.na(AniBirthday), !is.na(LacCalvingDate)) %>%
-  group_by(AniLifeNumber) %>%
-  summarise(age_at_first_calving = interval(min(AniBirthday), min(LacCalvingDate)) %/% months(1), .groups = "drop")
-
-insem_lactation <- insem_lactation %>%
-  left_join(first_calving, by = "AniLifeNumber")
-
-# Calculate the interval between calving and next insemination
-    # Get first insemination date per lactation
-insem_first <- insem_lactation %>%
-  group_by(LacAniId, LacNumber) %>%
-  summarise(first_insem = min(InsDate), .groups='drop')
-
-  # Calculate the interval
-insem_first <- insem_first %>%
+# Add lactation ID (LacId) from Lely RemLactation (lactation_data table) to the cleaned & validated lactation_summary_all in order to join it with insemination data
+lactation_summary_all_LacId <- lactation_summary_all %>%
   left_join(
-    lactation_data %>%
-      select(LacAniId, LacNumber, LacCalvingDate),
-    by = c("LacAniId", "LacNumber")
-  ) %>%
-  mutate(
-    calving_to_insem = interval(LacCalvingDate, first_insem) %/% days(1),
-    calving_to_insem = ifelse(calving_to_insem < 20 | calving_to_insem > 200, NA, calving_to_insem)
+    lactation_data_clean %>%
+      select(LacAniId, LacCalvingDate, LacId, LacRemarks, LacColostrumDate),
+    by = c("LacAniId", "LacCalvingDate" = "LacCalvingDate")
   )
 
-   # Join the first insemination data back to the main dataset
-insem_lactation <- insem_lactation %>%
-  left_join(
-    insem_first %>% select(LacAniId, LacNumber, calving_to_insem),
-    by = c("LacAniId", "LacNumber")
-  ) %>%
-  group_by(LacAniId, LacNumber) %>%
-  fill(calving_to_insem, .direction = "downup") %>%
-  ungroup()
-
-# Calculate the number of dry days before the next lactation
-insem_lactation <- insem_lactation %>%
-  group_by(LacAniId) %>%
-  arrange(LacNumber) %>%
-  mutate(
-    next_lactation_dry_days = as.numeric(LacCalvingDate - lag(LacDryOffDate)),
-    next_lactation_dry_days = ifelse(next_lactation_dry_days < 0 | next_lactation_dry_days > 120, NA, next_lactation_dry_days)
-  ) %>%
-  ungroup()
+# Checks
+dim(lactation_summary_all)
+dim(lactation_summary_all_LacId)
+colnames(lactation_summary_all_LacId) # Ensure LacId appears
+sum(is.na(lactation_summary_all_LacId$LacId))
 
 
-# Calculate the total number of lactations for each animal
-insem_lactation <- insem_lactation %>%
-  group_by(AniLifeNumber) %>%
-  mutate(
-    number_lactations = max(LacNumber, na.rm = TRUE)
-  ) %>%
-  ungroup()
+# Join lactation and insemination data to have one row per insemination attempt for each lactation cycle for each cow.
+
+insem_lactation <- insemination %>%
+  left_join(lactation_summary_all_LacId, by = c("AniLifeNumber", "InsLacId" = "LacId")) %>%
+  select(-c(InsItyId, InsDprId, InsEdiStatus, InsRowTimeStamp))
+
+# Checks
+dim(insem_lactation)
+colnames(insem_lactation)
 
 # Join lactation and insemination data to the pregnancy data
 insem_lac_preg <- insem_lactation %>%
-  left_join(pregnancy, by = c("InsId" = "PreInsId"))
+  left_join(pregnancy, by = c("InsId" = "PreInsId"), relationship = "many-to-many")
 
-# Create a dataframe that provides a summary per cow with the latest lactation date
-unique_cow_summary <- insem_lac_preg %>%
-  group_by(AniLifeNumber) %>%
-  summarise(
-    AniBirthday = first(AniBirthday),
-    number_lactations = max(number_lactations, na.rm = TRUE),
-    age_at_first_calving = first(age_at_first_calving),
-    latest_lactation_date = max(LacCalvingDate, na.rm = TRUE),
-    avg_inseminations = mean(!is.na(InsDate), na.rm = TRUE),
-    avg_lactation_length_days = mean(lactation_length_days, na.rm = TRUE),
-    avg_calving_to_insem_days = mean(calving_to_insem, na.rm = TRUE),
-    avg_next_lactation_dry_days = mean(next_lactation_dry_days, na.rm = TRUE),
-    .groups = "drop"
-  )
+# Checks
+dim(insem_lac_preg)
+colnames(insem_lac_preg)
+View(insem_lac_preg %>% filter(AniLifeNumber == "FR4404288134")) # visual exam
+
+# De-duplicate when there are multiple pregnancy confirmation dates
+
+insem_lac_preg_dedup <- insem_lac_preg %>%
+  group_by(InsId) %>%
+  arrange(desc(PreDate)) %>%  # Latest confirmation first
+  slice_head(n = 1) %>%
+  ungroup()
+
+dup_count <- insem_lac_preg %>%
+  group_by(InsId) %>%
+  filter(n() > 1) %>%
+  summarise(n_duplicates = n(), .groups = "drop")
+
+nrow(dup_count)  # Number of insemination events with multiple pregnancy records
+
+# Check
+nrow(insem_lactation) == nrow(insem_lac_preg_dedup)
+
+# Overwrite the previous join now that it has been de-duped and validated
+insem_lac_preg <- insem_lac_preg_dedup
+
+insem_lac_preg_flagged <- insem_lac_preg %>%
+  mutate(successful_insem = if_else(!is.na(PreDate), TRUE, FALSE))
+
+# after validation, save as original table
+insem_lac_preg <- insem_lac_preg_flagged
+
+# identify failed pregnancy after confirmation
+preg_confirmed <- insem_lac_preg %>%
+  filter(!is.na(PreDate), !is.na(LacCalvingDate))
+
+preg_successful <- preg_confirmed %>%
+  group_by(AniLifeNumber, LacCalvingDate) %>%
+  arrange(PreDate) %>%
+  slice_tail(n = 1) %>%
+  ungroup() %>%
+  mutate(successful_pregnancy = TRUE) %>%
+  select(InsId, successful_pregnancy) # Only keep flag and InsId for join
+
+insem_lac_preg <- insem_lac_preg %>%
+  left_join(preg_successful, by = "InsId") %>%
+  mutate(successful_pregnancy = if_else(is.na(successful_pregnancy), FALSE, successful_pregnancy))
+
+
+# Save the de-duped dataset (insemination * lactation_summary * pregnancy)
+write.csv(insem_lac_preg, here("data", "insem_lac_preg.csv"))
+saveRDS(insem_lac_preg, file = here::here("data", "insem_lac_preg.rds"))

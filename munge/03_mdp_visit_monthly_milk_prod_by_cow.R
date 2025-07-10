@@ -1,35 +1,39 @@
 # ------------------------------------------------------------------------------
 # Script Name:    lely_milk_comparison.R
 # Project:        Cockpit Agriculture – Lely Milk Production Analysis
-# Purpose:        Compare monthly per-cow milk production values between
-#                 MilkVisit × DeviceVisit (filtered for conserved milk)
-#                 and MilkDayProduction (all milk) to understand discrepancies.
 #
-# Description:    This script reads in two pre-processed datasets from SQL,
-#                 cleans and formats the data, joins the datasets by cow and
-#                 month, calculates the difference in reported milk volumes,
-#                 and visualizes the magnitude and direction of discrepancies.
-#                 It then filters out partial-month data and combines actual
-#                 conserved milk volumes with estimates from MDP (pre-Nov 2020)
-#                 to create a unified monthly cow-level dataset.
+# Purpose:        Quantify the difference between total and conserved milk
+#                 reported by Lely across two systems:
+#                 - MilkVisit × DeviceVisit (conserved milk only)
+#                 - MilkDayProduction (includes all milk, incl. discarded)
+#
+# Description:    This script reads in cow-level monthly milk production from
+#                 both systems. It:
+#                   • Aligns time periods and formats
+#                   • Calculates the monthly difference in liters per cow
+#                   • Visualizes systematic differences
+#                   • Filters out partial-month data (Oct 2020, Sept 2024)
+#                   • Combines measured conserved milk (Nov 2020–Aug 2024)
+#                     with estimated conserved milk (pre-Nov 2020)
+#                   • Produces a clean, unified dataset of monthly milk
+#                     production per cow for modeling and aggregation
 #
 # Inputs:
 #   - data/mdp_monthly_milk_production_by_cow.csv
 #   - data/monthly_saved_prod_by_cow_2020Oct_2024Aug.csv
 #   - data/mdp_monthly_kept_milk_estimates.csv
+#   - data/milk_production_monthly_farm1.csv
 #
 # Outputs:
-#   - full_milk_by_cow (bound table of estimated + measured conserved milk)
-#   - Summary statistics and plots of production differences by month
+#   - full_milk_by_cow.csv: unified monthly dataset of conserved milk by cow
+#   - full_milk_monthly: total monthly milk yield across all cows
+#   - Summary plot: MDP vs Visit-based differences
 #
 # Author:         Ashley Sanders
-# Last updated:   2025-07-08
+# Last updated:   2025-07-09
 # ------------------------------------------------------------------------------
 
-
-
-# Lely milk production reporting
-# Compare the monthly milk production per cow between MilkVisit x DeviceVisit and MilkDayProduction to determine if the latter counts all milk or only conserved milk.
+# Load necessary libraries
 
 library(readr)
 library(dplyr)
@@ -122,3 +126,15 @@ full_milk_by_cow <- bind_rows(mdp_estimates, visit)
 View(full_milk_by_cow)
 
 write.csv(full_milk_by_cow, here("data", "full_monthly_milk_prod_by_cow.csv"))
+
+# Summarize estimated conserved milk produced by month
+full_milk_monthly <- full_milk_by_cow %>%
+  group_by(Month) %>%
+  summarise(sum(MonthlyMilkYield_Liters), .groups = "drop")
+
+View(full_milk_monthly)
+
+# The complete data set for quantities of milk produced and delivered monthly, along with monthly revenues, the difference between Lely milking data and Invoice quantities and the ratio of that difference are all available in
+# milk_production_monthly_farm1.csv
+
+milk_production_monthly_farm1 <- read.csv(here("data", "milk_production_monthly_farm1.csv"))
