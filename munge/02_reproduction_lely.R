@@ -37,7 +37,7 @@ library(stringr)
 # Data: insemination table from Lely (run 01_save_sql_tables.R)
 # Data: Use lactation_summary_all generated from SQL ---
 
-lactation_summary_all <- read.csv(here("data", "lactatation_summary_all.csv"))
+lactation_summary_all <- read.csv(here("data", "lactation_summary_all.csv"))
 
 # Function to clean AniLifeNumber so that it matches the format of national_number/animal from Supabase tables
 clean_ani <- function(x) str_replace_all(str_trim(as.character(x)), " ", "")

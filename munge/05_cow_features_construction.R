@@ -17,42 +17,32 @@ library(stringr)
 # Function to clean AniLifeNumber so that it matches the format of national_number/animal from Supabase tables
 clean_ani <- function(x) str_replace_all(str_trim(as.character(x)), " ", "")
 
-lactation_summary_post2018 <- read.csv(here("data", "lactation_summary_post2018_11_01.csv"))
-
-# Calculate summarize lactation cycle data per cow
-
-lactation_summary_by_cow_post2018 <- lactation_summary_post2018 %>%
-  mutate(
-    milk_production_end_date = as.Date(milk_production_end_date),
-    milk_production_start_date = as.Date(milk_production_start_date),
-    lactation_duration = as.numeric(milk_production_end_date - milk_production_start_date)) %>%
-  group_by(AniLifeNumber) %>%
-  summarise(
-    number_lactations = max(pmax(RemLactation_LacNumber, CalculatedLactationCycle, na.rm = TRUE), na.rm = TRUE),
-    avg_lactation_duration = mean(lactation_duration, na.rm = TRUE),
-    still_milking = any(still_milking == TRUE),
-       .groups = "drop"
-  )
-
-lactation_summary_by_cow_post2018 <- lactation_summary_by_cow_post2018 %>%
-  mutate(AniLifeNumber = clean_ani(AniLifeNumber))
-
-# Identify cows that appear in lactation_summary_by_cow who should be included in the features table
-valid_cows <- unique(lactation_summary_by_cow_post2018$AniLifeNumber)
+# --- Calculate summarize lactation cycle data per cow ---
 
 # Calculate average length of dry off period based on full data set, including cycles that occurrred prior to November 2018
 lactation_summary_all <- read.csv(here("data", "lactation_summary_all.csv"))
 
-# Convert dry_off_interval to numeric, filter to valid values for the full lactation summary data set
+lactation_summary_all <- lactation_summary_all %>%
+  rename(AniId = CowID)
 
-lactation_intervals_per_cow <- lactation_summary_all %>%
+# Convert dry_off_interval to numeric, ensure dates are read as Data types, and clean the AniLifeNumber
+
+lactation_summary_all <- lactation_summary_all %>%
   mutate(dry_off_interval_num = as.numeric(dry_off_interval)) %>%
   filter(!is.na(dry_off_interval_num)) %>%   # exclude last cycle (no following start date)
-  mutate(AniLifeNumber = clean_ani(AniLifeNumber)) %>%
+  mutate(AniLifeNumber = clean_ani(AniLifeNumber),
+         milk_production_end_date = as.Date(milk_production_end_date),
+         milk_production_start_date = as.Date(milk_production_start_date),
+         lactation_duration = as.numeric(milk_production_end_date - milk_production_start_date))
+
+lactation_intervals_per_cow <- lactation_summary_all %>%
   group_by(AniLifeNumber) %>%
   summarise(
     avg_dry_interval = mean(dry_off_interval_num, na.rm = TRUE),
     n_intervals = n(),
+    number_lactations = max(pmax(RemLactation_LacNumber, CalculatedLactationCycle, na.rm = TRUE), na.rm = TRUE),
+    avg_lactation_duration = mean(lactation_duration, na.rm = TRUE),
+    still_milking = any(still_milking == TRUE),
     .groups = "drop"
   )
 
@@ -138,15 +128,8 @@ cow_identity <- milk_cows %>%
   mutate(AniLifeNumber = clean_ani(AniLifeNumber)) %>%
   distinct()
 
-# Prepare entry & exit data (from animals_history) ---
-animals_meta_farm1 <- animals_meta %>%
-  filter(customer_id == "16450bc2-f930-4052-a3f7-a602646e64cc",
-         race == "66") %>%
-  mutate(animal = clean_ani(animal),
-         entry_date = as.Date(entry_date),
-         exit_date = as.Date(exit_date)) %>%
-  select(animal, entry_code, entry_date, exit_code, exit_date) %>%
-  distinct(animal, .keep_all = TRUE)
+# Entry & exit data (animals_meta_farm1)
+
 
 
 # Prepare slaughter data (optional additional outcome) using animals_slaughter table from 01_save_sql_tables.R.
