@@ -32,9 +32,8 @@ library(lubridate)
 library(tidyverse)
 library(stringr)
 
-# Run munge/01_save_sql_tables.R to load the Lely SQL tables
 
-# Data: insemination table from Lely (run 01_save_sql_tables.R)
+# Data: insemination table from cache
 # Data: Use lactation_summary_all generated from SQL ---
 
 lactation_summary_all <- read.csv(here("data", "lactation_summary_all.csv"))
@@ -64,8 +63,12 @@ lactation_summary_all_LacId <- lactation_summary_all %>%
   left_join(
     lactation_data_clean %>%
       select(LacAniId, LacCalvingDate, LacId, LacRemarks, LacColostrumDate),
-    by = c("LacAniId", "LacCalvingDate" = "LacCalvingDate")
-  )
+    by = c("LacAniId", "LacCalvingDate" = "LacCalvingDate"))
+
+lactation_summary_all_LacId <- lactation_summary_all_LacId %>%
+  left_join(lely_animal %>% # Cleaned AniLifeNumbers
+              select(AniLifeNumber, AniBirthday),
+            by = "AniLifeNumber")
 
 # Checks
 dim(lactation_summary_all)
@@ -134,7 +137,8 @@ preg_successful <- preg_confirmed %>%
 
 insem_lac_preg <- insem_lac_preg %>%
   left_join(preg_successful, by = "InsId") %>%
-  mutate(successful_pregnancy = if_else(is.na(successful_pregnancy), FALSE, successful_pregnancy))
+  mutate(successful_pregnancy = if_else(is.na(successful_pregnancy), FALSE, successful_pregnancy)) %>%
+  select(-c(InsSequenceNumber, InsChargeNumber, InsConId))
 
 
 # Save the de-duped dataset (insemination * lactation_summary * pregnancy)

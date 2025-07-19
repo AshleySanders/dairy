@@ -47,51 +47,6 @@ lactation_intervals_per_cow <- lactation_summary_all %>%
   )
 
 
-
-
-# Calculate age of cow at first calving
-first_calving <- lactation_animal %>%
-  filter(LacNumber == 1, !is.na(AniBirthday), !is.na(LacCalvingDate)) %>%
-  group_by(AniLifeNumber) %>%
-  slice_min(LacCalvingDate, with_ties = FALSE) %>%
-  summarise(
-    age_at_first_calving = interval(AniBirthday, LacCalvingDate) %/% months(1),
-    .groups = "drop"
-  )
-
-lactation_animal <- lactation_animal %>%
-  left_join(first_calving, by = "AniLifeNumber")
-
-View(lactation_animal)
-
-# Calculate the interval between calving and next insemination
-# Get first insemination date per lactation
-insem_first <- insem_lactation %>%
-  group_by(LacAniId, CalculatedLactationCycle) %>%
-  summarise(first_insem = min(InsDate), .groups='drop')
-
-# Calculate the interval
-insem_first <- insem_first %>%
-  left_join(
-    lactation_data %>%
-      select(LacAniId, LacNumber, LacCalvingDate),
-    by = c("LacAniId", "LacNumber")
-  ) %>%
-  mutate(
-    calving_to_insem = interval(LacCalvingDate, first_insem) %/% days(1),
-    calving_to_insem = ifelse(calving_to_insem < 20 | calving_to_insem > 200, NA, calving_to_insem)
-  )
-
-# Join the first insemination data back to the main dataset
-insem_lactation <- insem_lactation %>%
-  left_join(
-    insem_first %>% select(LacAniId, LacNumber, calving_to_insem),
-    by = c("LacAniId", "LacNumber")
-  ) %>%
-  group_by(LacAniId, LacNumber) %>%
-  fill(calving_to_insem, .direction = "downup") %>%
-  ungroup()
-
 # Create a dataframe that provides a summary per cow with the latest lactation date
 unique_cow_summary <- insem_lac_preg %>%
   group_by(AniLifeNumber) %>%

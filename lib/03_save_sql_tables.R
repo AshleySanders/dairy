@@ -183,10 +183,13 @@ cache("animals_history")
 
 animals <- dbGetQuery(prod, "
   SELECT
+    created_at,
+    customer_id,
     birth_date,
     country_code,
     national_number,
-    race
+    race,
+    mother
   FROM animals
   ORDER BY national_number")
 
@@ -206,7 +209,9 @@ animals_slaughter <- dbGetQuery(prod, "
   SELECT
     national_number,
     date,
-    weight
+    weight,
+    created_at,
+    customer_id
   FROM animals_slaughter
   ORDER BY national_number, date")
 
