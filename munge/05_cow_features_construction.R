@@ -83,7 +83,7 @@ cow_identity <- milk_cows %>%
   mutate(AniLifeNumber = clean_ani(AniLifeNumber)) %>%
   distinct()
 
-# Entry & exit data (animals_meta_farm1)
+# Entry & exit data (dairy_meta_farm1)
 
 
 

@@ -76,6 +76,8 @@ HemAnimal <- dbGetQuery(lely, "
   FROM HemAnimal
   ORDER BY AniId")
 
+# Run any necessary manual corrections from /lib
+
 cache("HemAnimal")
 
 # Load lactation records
@@ -93,7 +95,7 @@ lactation <- dbGetQuery(lely, "
 
 cache("lactation")
 
-# Join milk data to cow identity info
+# Join milk data to cow identity info with the corrected HemAnimal data
 milk_cows <- milk_all %>%
   left_join(
     HemAnimal %>% select(AniId, AniLifeNumber, AniActive, AniGenId, AniBirthday, AniMotherLifeNumber),

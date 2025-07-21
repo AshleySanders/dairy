@@ -1,11 +1,47 @@
+# ------------------------------------------------------------------------------
+# Script Name:    01_animals_meta_data_creation.R
+# Project:        Cockpit Agriculture – Herd Management Strategy
+# Purpose:        Create clean animal-level metadata for a specific farm from
+#                 Supabase tables. Includes herd history, demographics, and exit
+#                 info for all dairy cows.
+#
+# Description:    This script:
+#                 - Extracts and cleans animal and herd history data
+#                 - Derives entry/exit metadata and age-at-exit
+#                 - Filters for dairy cows (excludes males)
+#                 - Joins slaughter data to supplement missing exit info
+#                 - Cleans national numbers and dates
+#                 - Checks for join mismatches with Lely HemAnimal table
+#
+# Inputs:
+#   - Supabase tables: animals, animals_history, animals_slaughter
+#   - Lely HemAnimal table (for join validation)
+#
+# Outputs:
+#   - cache/dairy_meta_farm1.RData: Cleaned metadata for all dairy cows
+#
+# Notes:
+#   - This script is farm-specific and uses hardcoded customer_id
+#   - Manual corrections should be handled via farm-specific script in /lib
+#   - Re-cache HemAnimal after running any corrections
+#
+# Author:         Ashley Sanders
+# Created:        2025-07-18
+# Last updated:   2025-07-21
+# ------------------------------------------------------------------------------
+
+
 # Function to clean AniLifeNumber so that it matches the format of national_number/animal from Supabase tables
 clean_ani <- function(x) str_replace_all(str_trim(as.character(x)), " ", "")
 
+# Define farm id
+
+farm_id <- "16450bc2-f930-4052-a3f7-a602646e64cc"
 
 # Examining scraped data in supabase to ensure accuracy.
 
 animals_history_farm1 <- animals_history %>%
-  filter(customer_id == "16450bc2-f930-4052-a3f7-a602646e64cc")
+  filter(customer_id == farm_id)
 
 animals_history_farm1 <-animals_history_farm1 %>%
   mutate(date = as.Date(date))
@@ -19,7 +55,7 @@ animals_history_farm1 <- animals_history_farm1 %>%
   select(-animal)
 
 animals_farm1 <- animals %>%
-  filter(customer_id == "16450bc2-f930-4052-a3f7-a602646e64cc")
+  filter(customer_id == farm_id)
 
 animals_farm1 <- animals_farm1 %>%
   mutate(national_number = clean_ani(national_number)) %>%
@@ -53,7 +89,7 @@ animals_meta_farm1 <- animals_meta_farm1 %>%
   )
 
 animals_slaughter_farm1 <- animals_slaughter %>%
-  filter(customer_id == "16450bc2-f930-4052-a3f7-a602646e64cc") %>%
+  filter(customer_id == farm_id) %>%
   distinct() %>%
   mutate(national_number = clean_ani(national_number),
          slaughter_date = as.Date(date)) %>%
@@ -78,10 +114,19 @@ animals_meta_farm1 <- animals_meta_farm1 %>%
     interval(birth_date, exit_date) %/% months(1),
     NA_integer_
   ))
+
 # Filter the metadata to dairy cows
 dairy_meta_farm1 <- animals_meta_farm1 %>%
   mutate(category = str_trim(category)) %>%
-  filter(category != "MA")
+  filter(category != "MA") %>%
+  arrange(national_number, desc(date)) %>%  # most recent record first
+  group_by(national_number) %>%
+  slice(1) %>%  # keep only the most recent row per cow
+  ungroup()
+
+# Run any necessary manual correction from /lib
+
+cache("dairy_meta_farm1")
 
 # Check the quality of animal national numbers and metadata in Lely
 HemAnimal <- HemAnimal %>%
@@ -93,9 +138,6 @@ HemAnimal <- HemAnimal %>%
 HemAnimal %>%
   count(AniLifeNumber) %>%
   filter(n > 1)
-
-
-
 
 lely_supa_animal_diff <- dairy_meta_farm1 %>%
   anti_join(HemAnimal, by = c("national_number" = "AniLifeNumber"))

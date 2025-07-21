@@ -1,28 +1,31 @@
 # ------------------------------------------------------------------------------
 # Script Name:    02_reproduction.R
 # Project:        Cockpit Agriculture – Herd Management Strategy
-# Purpose:        Join insemination, lactation, and pregnancy data to create a
-#                 clean, de-duplicated dataset for reproductive event analysis.
 #
-# Description:    This script prepares cow-level reproductive records by:
-#                 - Cleaning identifiers and date fields
-#                 - Attaching lactation IDs to validated calving events
-#                 - Joining insemination records to lactations
-#                 - Matching pregnancies to inseminations (deduping on PreDate)
-#                 - Flagging each insemination as successful (if confirmed)
-#                 - Flagging pregnancies as successful (if result in calving)
+# Purpose:        Construct a clean, cow-level dataset of reproductive events,
+#                 combining lactation, insemination, and pregnancy records.
+#
+# Description:    This script performs the following:
+#                 - Cleans and standardizes animal identifiers
+#                 - Attaches each insemination to a lactation cycle
+#                 - Joins pregnancy confirmation data to insemination records
+#                 - Deduplicates pregnancies (latest confirmation per InsId)
+#                 - Flags successful inseminations (pregnancy confirmed)
+#                 - Flags successful pregnancies (confirmed + led to calving)
+#                 - Adds birth_date from validated Supabase metadata
 #
 # Inputs:
-#   - Lely SQL tables: RemInsemination, RemPregnancy, RemLactation (for LacId)
-#   - data/lactation_summary_all.csv (validated summary from SQL)
+#   - Cache: insemination, pregnancy
+#   - CSV:   data/lactation_summary_all.csv (from SQL script)
+#   - Table: dairy_meta_farm1 (de-duplicated Supabase metadata)
 #
 # Outputs:
-#   - data/insem_lac_preg.rds: Cleaned, deduplicated, and flagged dataset
-#   - data/insem_lac_preg.csv: Exported copy for inspection or sharing
+#   - data/insem_lac_preg.rds: Cleaned and flagged dataset (RDS)
+#   - data/insem_lac_preg.csv: Exported copy (CSV)
 #
 # Author:         Ashley Sanders
 # Created:        2025-06-19
-# Last updated:   2025-07-10
+# Last Updated:   2025-07-21
 # ------------------------------------------------------------------------------
 
 
@@ -41,46 +44,62 @@ lactation_summary_all <- read.csv(here("data", "lactation_summary_all.csv"))
 # Function to clean AniLifeNumber so that it matches the format of national_number/animal from Supabase tables
 clean_ani <- function(x) str_replace_all(str_trim(as.character(x)), " ", "")
 
-lactation_summary_all <- lactation_summary_all %>%
+lactation_summary <- lactation_summary_all %>%
   mutate(AniLifeNumber = clean_ani(AniLifeNumber),
-         LacAniId = clean_ani(CowID),
-         LacCalvingDate = as.Date(LacCalvingDate)) %>%
-  select(-CowID)
+         AniId = clean_ani(AniId),
+         LacCalvingDate = as.Date(LacCalvingDate))
 
 insemination <- insemination %>%
   mutate(AniLifeNumber = clean_ani(AniLifeNumber),
          InsDate = as.Date(InsDate))
 
-lactation_data_clean <- lactation_data %>%
-  mutate(LacAniId = clean_ani(LacAniId),
-         LacCalvingDate = as.Date(LacCalvingDate))
-
 pregnancy <- pregnancy %>%
   mutate(PreDate = as.Date(PreDate))
 
 # Add lactation ID (LacId) from Lely RemLactation (lactation_data table) to the cleaned & validated lactation_summary_all in order to join it with insemination data
-lactation_summary_all_LacId <- lactation_summary_all %>%
-  left_join(
-    lactation_data_clean %>%
-      select(LacAniId, LacCalvingDate, LacId, LacRemarks, LacColostrumDate),
-    by = c("LacAniId", "LacCalvingDate" = "LacCalvingDate"))
 
-lactation_summary_all_LacId <- lactation_summary_all_LacId %>%
-  left_join(lely_animal %>% # Cleaned AniLifeNumbers
-              select(AniLifeNumber, AniBirthday),
-            by = "AniLifeNumber")
+lactation_summary <- lactation_summary %>%
+  mutate(AniId = as.character(AniId))
+
+lactation_summary <- lactation_summary%>%
+  mutate(
+    AniLifeNumber = case_when(
+      AniId == "253" ~ "FR4404288298",
+      AniId == "257" ~ "FR4404288299",
+      AniId == "267" ~ "FR4404288307",
+      AniId == "277" ~ "FR4404288308",
+      AniId == "282" ~ "FR4404288319",
+      AniId == "289" ~ "FR4404288318",
+      AniId == "286" ~ "FR4404288320",
+      AniId == "987" ~ "FR4404288598",
+      AniId == "1040" ~ "FR4404288645",
+      AniId == "1064" ~ "FR4404288667",
+      AniId == "1071" ~ "FR4404288645",
+      TRUE ~ AniLifeNumber
+    ))
+
+lactation_summary <- lactation_summary %>%
+  mutate(AniId = as.integer(AniId))
+
+dairy_meta_farm1 <- dairy_meta_farm1 %>%
+  mutate(national_number = clean_ani(national_number))
+
+lactation_summary <- lactation_summary %>%
+  left_join(dairy_meta_farm1 %>%
+              select(national_number, birth_date),
+            by = c("AniLifeNumber" = "national_number"))
 
 # Checks
 dim(lactation_summary_all)
-dim(lactation_summary_all_LacId)
-colnames(lactation_summary_all_LacId) # Ensure LacId appears
-sum(is.na(lactation_summary_all_LacId$LacId))
+dim(lactation_summary)
+colnames(lactation_summary) # Ensure LacId appears
+sum(is.na(lactation_summary$LacId))
 
 
 # Join lactation and insemination data to have one row per insemination attempt for each lactation cycle for each cow.
 
 insem_lactation <- insemination %>%
-  left_join(lactation_summary_all_LacId, by = c("AniLifeNumber", "InsLacId" = "LacId")) %>%
+  left_join(lactation_summary, by = c("AniLifeNumber", "InsLacId" = "LacId")) %>%
   select(-c(InsItyId, InsDprId, InsEdiStatus, InsRowTimeStamp))
 
 # Checks
