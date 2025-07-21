@@ -217,6 +217,10 @@ animals_slaughter <- dbGetQuery(prod, "
 
 cache("animals_slaughter")
 
+milk_invoice <- dbGetQuery(prod, "
+  SELECT *
+  FROM milk_invoice")
+
 # --- Save Mil'Klic tables from Supabase, denoted by "mk_" prefix to table names here ---
 
 mk_animals_lactations <- dbGetQuery(prod, "
