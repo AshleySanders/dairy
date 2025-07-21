@@ -110,10 +110,7 @@ cow_features <- cow_milk_summary %>%
   left_join(lactation_intervals_per_cow, by = "AniLifeNumber") %>%
   mutate(
     birth_year = year(AniBirthday),
-    AniActive = if_else(!is.na(exit_date), FALSE, AniActive),
-    exit_date = coalesce(exit_date, slaughter_date),
-    exit_code = if_else(is.na(exit_code) & !is.na(slaughter_date), "B", exit_code),
-    age_at_exit_days = as.numeric(exit_date - AniBirthday)
+    floor(time_length(interval(AniBirthday, exit_date), "months"))
   )
 
 

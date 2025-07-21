@@ -58,24 +58,21 @@ clean_ani <- function(x) str_replace_all(str_trim(as.character(x)), " ", "")
 insem_lac_preg <- readRDS(here::here("data", "insem_lac_preg.rds"))
 
 # Calculate age at calving for each lactation cycle
-age_at_calving <- lactation_summary_all_LacId %>%
-  filter(RemLactation_LacNumber > 0, !is.na(AniBirthday),
+age_at_calving <- lactation_summary %>%
+  filter(RemLactation_LacNumber > 0, !is.na(birth_date),
          !is.na(LacCalvingDate), !is.na(LacId)) %>%
   mutate(
-    age_at_calving = interval(AniBirthday, LacCalvingDate) %/% months(1)) %>%
+    age_at_calving = interval(birth_date, LacCalvingDate) %/% months(1)) %>%
   select(AniLifeNumber, LacId, age_at_calving)
 
 age_at_calving_dedup <- age_at_calving %>%
   group_by(AniLifeNumber, LacId) %>%
   summarise(age_at_calving = first(age_at_calving), .groups = "drop")
 
-lactation_metrics <- lactation_summary_all_LacId %>%
+lactation_metrics <- lactation_summary %>%
   left_join(age_at_calving_dedup, by = c("AniLifeNumber", "LacId"))
 
 # Number of inseminations per lactation cycle
-insemination <- insemination %>%
-  mutate(AniLifeNumber = clean_ani(AniLifeNumber))
-
 insem_per_lac <- insemination %>%
   group_by(AniLifeNumber, InsLacId) %>%
   summarise(n_insem = max(InsNumber), .groups = "drop")
@@ -99,6 +96,7 @@ mystery_NAs <- lactation_metrics %>%
 
 View(mystery_NAs) # All cows who are still lactating are missing next insemination data
 
+# Create an indicator for first pregnancies. Create a flag to indicate why n_insem is NA
 lactation_metrics <- lactation_metrics %>%
   mutate(
     first_pregnancy = RemLactation_LacNumber == 1,
@@ -117,75 +115,58 @@ lactation_metrics <- lactation_metrics %>%
   )
 
 # Create a variable to indicate last lactation-cycles
-animals_meta_farm1 <- animals_meta_farm1 %>%
-  mutate(AniLifeNumber = clean_ani(AniLifeNumber))
-
-# Identify duplicate AniLifeNumbers
-duplicate_ids <- animals_meta_farm1 %>%
-  count(AniLifeNumber) %>%
-  filter(n > 1) %>%
-  pull(AniLifeNumber)
-
-# View all columns for duplicated cows
-filtered_animals <- animals_meta_farm1 %>%
-  filter(AniLifeNumber %in% duplicate_ids) %>%
-  arrange(AniLifeNumber)
-
-animals_meta_dedup <- animals_meta_farm1 %>%
-  distinct(AniLifeNumber, .keep_all = TRUE) # dedup dataframe
-
-View(animals_history)
-
-
 lactation_metrics <- lactation_metrics %>%
   left_join(
-    animals_meta_dedup %>%
-      select(AniLifeNumber, AniActive, exit_date, exit_code),
-    by = "AniLifeNumber"
+    dairy_meta_farm1 %>%
+      select(national_number, exit_date, exit_code),
+    by = c("AniLifeNumber" = "national_number")
   )
 
 lactation_metrics <- lactation_metrics %>%
-  group_by(AniLifeNumber, RemLactation_LacNumber) %>%
+  group_by(AniLifeNumber) %>%
   mutate(
-    max_lac_in_inactive_cows = if (!is.na(exit_code)) {
-      max(RemLactation_LacNumber[AniActive == FALSE], na.rm = TRUE)
-    } else {
+    max_lac_if_exited = if(any(!is.na(exit_date))) {
+      max(RemLactation_LacNumber[!is.na(exit_date)], na.rm = TRUE)
+    }
+    else {
       NA_integer_
     },
     last_lactation = if_else(
-      !is.na(max_lac_in_inactive_cows) & RemLactation_LacNumber == max_lac_in_inactive_cows,
+      !is.na(max_lac_if_exited) & RemLactation_LacNumber == max_lac_if_exited,
       TRUE,
-      FALSE)
-    ) %>%
-  ungroup() %>%
-  select(-max_lac_in_inactive_cows)
-
-# Calculate the interval between calving and next insemination
-
-
-# Get first insemination date per lactation
-insem_first <- insem_lactation %>%
-  group_by(LacAniId, CalculatedLactationCycle) %>%
-  summarise(first_insem = min(InsDate), .groups='drop')
-
-# Calculate the interval
-insem_first <- insem_first %>%
-  left_join(
-    lactation_data %>%
-      select(LacAniId, LacNumber, LacCalvingDate),
-    by = c("LacAniId", "LacNumber")
+      FALSE
+    )
   ) %>%
+  ungroup() %>%
+  select(-max_lac_if_exited)
+
+# Calculate the number of days between last lactation (milk_production_end_date) and exit_date for culled cows
+lactation_metrics <- lactation_metrics %>%
+  group_by(AniLifeNumber) %>%
   mutate(
-    calving_to_insem = interval(LacCalvingDate, first_insem) %/% days(1),
-    calving_to_insem = ifelse(calving_to_insem < 20 | calving_to_insem > 200, NA, calving_to_insem)
+    endmilk_to_exit_days = if_else(
+      last_lactation == TRUE & !is.na(exit_date),
+      as.numeric(as.Date(exit_date) - as.Date(milk_production_end_date)),
+      NA_real_
+    )
+  ) %>%
+  ungroup()
+
+# Calculate the interval between calving and next insemination attempt
+# Step 1: Calculate calving-to-insem interval per cow-lactation from insem_lac_preg
+calving_to_insem <- insem_lac_preg %>%
+  group_by(AniLifeNumber, InsLacId) %>%
+  summarise(
+    calving_to_insem_days = if (any(InsNumber == 1)) {
+      as.numeric(first(InsDate[InsNumber == 1]) - first(LacCalvingDate))
+    } else {
+      NA_real_
+    },
+    .groups = "drop"
   )
 
-# Join the first insemination data back to the main dataset
-insem_lactation <- insem_lactation %>%
-  left_join(
-    insem_first %>% select(LacAniId, LacNumber, calving_to_insem),
-    by = c("LacAniId", "LacNumber")
-  ) %>%
-  group_by(LacAniId, LacNumber) %>%
-  fill(calving_to_insem, .direction = "downup") %>%
-  ungroup()
+# Step 2: Join back to lactation_metrics using AniLifeNumber and InsLacId (or LacId)
+lactation_metrics <- lactation_metrics %>%
+  left_join(calving_to_insem, by = c("AniLifeNumber", "LacId" = "InsLacId"))
+
+

@@ -49,10 +49,6 @@ lactation_summary <- lactation_summary_all %>%
          AniId = clean_ani(AniId),
          LacCalvingDate = as.Date(LacCalvingDate))
 
-insemination <- insemination %>%
-  mutate(AniLifeNumber = clean_ani(AniLifeNumber),
-         InsDate = as.Date(InsDate))
-
 pregnancy <- pregnancy %>%
   mutate(PreDate = as.Date(PreDate))
 
@@ -89,6 +85,8 @@ lactation_summary <- lactation_summary %>%
               select(national_number, birth_date),
             by = c("AniLifeNumber" = "national_number"))
 
+cache("lactation_summary")
+
 # Checks
 dim(lactation_summary_all)
 dim(lactation_summary)
@@ -99,8 +97,7 @@ sum(is.na(lactation_summary$LacId))
 # Join lactation and insemination data to have one row per insemination attempt for each lactation cycle for each cow.
 
 insem_lactation <- insemination %>%
-  left_join(lactation_summary, by = c("AniLifeNumber", "InsLacId" = "LacId")) %>%
-  select(-c(InsItyId, InsDprId, InsEdiStatus, InsRowTimeStamp))
+  left_join(lactation_summary, by = c("AniLifeNumber", "InsLacId" = "LacId"))
 
 # Checks
 dim(insem_lactation)
@@ -108,7 +105,9 @@ colnames(insem_lactation)
 
 # Join lactation and insemination data to the pregnancy data
 insem_lac_preg <- insem_lactation %>%
-  left_join(pregnancy, by = c("InsId" = "PreInsId"), relationship = "many-to-many")
+  left_join(pregnancy, by = c("InsId" = "PreInsId"), relationship = "many-to-many") %>%
+  select(-c(AniId.y, AniBirthday)) %>%
+  rename(AniId = AniId.x)
 
 # Checks
 dim(insem_lac_preg)
@@ -156,8 +155,7 @@ preg_successful <- preg_confirmed %>%
 
 insem_lac_preg <- insem_lac_preg %>%
   left_join(preg_successful, by = "InsId") %>%
-  mutate(successful_pregnancy = if_else(is.na(successful_pregnancy), FALSE, successful_pregnancy)) %>%
-  select(-c(InsSequenceNumber, InsChargeNumber, InsConId))
+  mutate(successful_pregnancy = if_else(is.na(successful_pregnancy), FALSE, successful_pregnancy))
 
 
 # Save the de-duped dataset (insemination * lactation_summary * pregnancy)

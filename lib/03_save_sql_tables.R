@@ -132,12 +132,16 @@ cache("lactation_animal")
 # Get insemination data
 insemination <- dbGetQuery(lely, "
   SELECT
-    RemInsemination.*,
+    InsId,
+    InsSirId,
+    InsNumber,
+    InsRemarks,
+    InsDate,
+    InsLacId,
+    HemAnimal.AniId,
     HemAnimal.AniLifeNumber,
     HemAnimal.AniBirthday,
-    HemAnimal.AniKeep,
     HemAnimal.AniGenId,
-    HemAnimal.AniActive,
     HemAnimal.AniMotherLifeNumber
   FROM RemInsemination
   INNER JOIN RemLactation
@@ -150,6 +154,7 @@ insemination <- dbGetQuery(lely, "
 # Convert date columns to Date type
 insemination <- insemination %>%
   mutate(
+    AniLifeNumber = clean_ani(AniLifeNumber),
     AniBirthday = as.Date(AniBirthday, format = "%Y-%m-%d"),
     InsDate = as.Date(InsDate, format = "%Y-%m-%d")
   )
