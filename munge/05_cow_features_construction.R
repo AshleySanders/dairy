@@ -19,11 +19,34 @@ clean_ani <- function(x) str_replace_all(str_trim(as.character(x)), " ", "")
 
 # --- Calculate summarize lactation cycle data per cow ---
 
-# Calculate average length of dry off period based on full data set, including cycles that occurrred prior to November 2018
-lactation_summary_all <- read.csv(here("data", "lactation_summary_all.csv"))
+# Calculate average length of dry off period based on full data set
+lactation_summary <- readRDS(here("cache", "lactation_summary.RDS"))
 
 lactation_summary_all <- lactation_summary_all %>%
   rename(AniId = CowID)
+
+# Compute age_at exit
+exit_age <- lactation_summary %>%
+  mutate(
+    AniBirthday = as.Date(AniBirthday),
+    exit_date = as.Date(exit_date),
+    age_at_exit = if_else(
+    !is.na(exit_date),
+    interval(AniBirthday, exit_date) %/% months(1),
+    NA_integer_
+  ))
+
+# Compute number of days between last milking date and exit date
+endmilk_to_exit <- lactation_summary %>%
+  group_by(AniLifeNumber) %>%
+  mutate(
+    endmilk_to_exit_days = if_else(
+      last_lactation == TRUE & !is.na(exit_date),
+      as.numeric(as.Date(exit_date) - as.Date(milk_production_end_date)),
+      NA_real_
+    )
+  ) %>%
+  ungroup()
 
 # Convert dry_off_interval to numeric, ensure dates are read as Data types, and clean the AniLifeNumber
 

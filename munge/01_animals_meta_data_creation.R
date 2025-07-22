@@ -70,6 +70,7 @@ animals_meta_farm1 <- animals_meta_farm1 %>%
               select(-customer_id),
             by = "national_number")
 
+# --- Impute entry codes for cows born on the farm ---
 # Capture all national numbers of cows in the herd
 herd_ids <- unique(animals_meta_farm1$national_number)
 
@@ -88,6 +89,7 @@ animals_meta_farm1 <- animals_meta_farm1 %>%
     )
   )
 
+# Add slaughter information
 animals_slaughter_farm1 <- animals_slaughter %>%
   filter(customer_id == farm_id) %>%
   distinct() %>%
@@ -106,14 +108,6 @@ animals_meta_farm1 <- animals_meta_farm1 %>%
          birth_date = as.Date(birth_date),
          entry_date = as.Date(entry_date),
          exit_date = as.Date(exit_date))
-
-# Create variable for age_at_exit
-animals_meta_farm1 <- animals_meta_farm1 %>%
-  mutate(age_at_exit = if_else(
-    !is.na(exit_date),
-    interval(birth_date, exit_date) %/% months(1),
-    NA_integer_
-  ))
 
 # Filter the metadata to dairy cows
 dairy_meta_farm1 <- animals_meta_farm1 %>%

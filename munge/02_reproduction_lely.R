@@ -47,7 +47,8 @@ clean_ani <- function(x) str_replace_all(str_trim(as.character(x)), " ", "")
 lactation_summary <- lactation_summary_all %>%
   mutate(AniLifeNumber = clean_ani(AniLifeNumber),
          AniId = clean_ani(AniId),
-         LacCalvingDate = as.Date(LacCalvingDate))
+         LacCalvingDate = as.Date(LacCalvingDate)) %>%
+  select(-still_milking)
 
 pregnancy <- pregnancy %>%
   mutate(PreDate = as.Date(PreDate))
@@ -82,26 +83,61 @@ dairy_meta_farm1 <- dairy_meta_farm1 %>%
 
 lactation_summary <- lactation_summary %>%
   left_join(dairy_meta_farm1 %>%
-              select(national_number, birth_date),
+              select(-c(birth_date, country_code, mother, weight, slaughter_date, age_at_exit)),
             by = c("AniLifeNumber" = "national_number"))
 
-cache("lactation_summary")
+lactation_summary <- lactation_summary %>%
+  left_join(HemAnimal %>%
+  select(AniLifeNumber, AniBirthday, AniMotherLifeNumber, AniGenId), by = "AniLifeNumber", relationship = "many-to-many")
+
+# Ensure correct data types
+glimpse(lactation_summary)
+
+lactation_summary <- lactation_summary %>%
+  mutate(
+    LacColostrumDate = as.Date(LacColostrumDate),
+    milk_production_start_date = as.Date(milk_production_start_date),
+    milk_production_end_date = as.Date(milk_production_end_date),
+    mean_fat_percent = as.numeric(mean_fat_percent),
+    mean_protein_percent = as.numeric(mean_protein_percent),
+    dry_off_date = as.Date(dry_off_date),
+    dry_off_interval = as.integer(dry_off_interval)
+  )
 
 # Checks
 dim(lactation_summary_all)
 dim(lactation_summary)
-colnames(lactation_summary) # Ensure LacId appears
+colnames(lactation_summary)
 sum(is.na(lactation_summary$LacId))
 
+# De-duplicate based on LacIds
+lactation_summary_dedup <- lactation_summary %>%
+  arrange(desc(!is.na(AniMotherLifeNumber))) %>%  # prioritize non-NA mother IDs
+  group_by(LacId) %>%
+  slice(1) %>%
+  ungroup()
+
+# verify that the number of rows matches the original lactation_summary_all table
+nrow(lactation_summary_all) == nrow(lactation_summary_dedup)
+
+# After verification save the de-duped table as the original table name
+lactation_summary <- lactation_summary_dedup
+
+# Save final dataframe in cache
+cache("lactation_summary")
 
 # Join lactation and insemination data to have one row per insemination attempt for each lactation cycle for each cow.
 
 insem_lactation <- insemination %>%
   left_join(lactation_summary, by = c("AniLifeNumber", "InsLacId" = "LacId"))
 
+
+
 # Checks
 dim(insem_lactation)
 colnames(insem_lactation)
+
+cache(lactation_summary)
 
 # Join lactation and insemination data to the pregnancy data
 insem_lac_preg <- insem_lactation %>%
