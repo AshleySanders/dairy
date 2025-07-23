@@ -39,7 +39,7 @@ library(stringr)
 # Data: insemination table from cache
 # Data: Use lactation_summary_all generated from SQL ---
 
-lactation_summary_all <- read.csv(here("data", "lactation_summary_all.csv"))
+lactation_summary_all <- read.csv(here("data", "lactation_cycles_milk_metrics.csv"))
 
 # Function to clean AniLifeNumber so that it matches the format of national_number/animal from Supabase tables
 clean_ani <- function(x) str_replace_all(str_trim(as.character(x)), " ", "")
@@ -47,8 +47,7 @@ clean_ani <- function(x) str_replace_all(str_trim(as.character(x)), " ", "")
 lactation_summary <- lactation_summary_all %>%
   mutate(AniLifeNumber = clean_ani(AniLifeNumber),
          AniId = clean_ani(AniId),
-         LacCalvingDate = as.Date(LacCalvingDate)) %>%
-  select(-still_milking)
+         LacCalvingDate = as.Date(LacCalvingDate))
 
 pregnancy <- pregnancy %>%
   mutate(PreDate = as.Date(PreDate))
@@ -98,6 +97,7 @@ lactation_summary <- lactation_summary %>%
     LacColostrumDate = as.Date(LacColostrumDate),
     milk_production_start_date = as.Date(milk_production_start_date),
     milk_production_end_date = as.Date(milk_production_end_date),
+    avg_daily_yield = as.numeric(avg_daily_yield),
     mean_fat_percent = as.numeric(mean_fat_percent),
     mean_protein_percent = as.numeric(mean_protein_percent),
     dry_off_date = as.Date(dry_off_date),
@@ -129,21 +129,19 @@ cache("lactation_summary")
 # Join lactation and insemination data to have one row per insemination attempt for each lactation cycle for each cow.
 
 insem_lactation <- insemination %>%
-  left_join(lactation_summary, by = c("AniLifeNumber", "InsLacId" = "LacId"))
-
-
+  left_join(lactation_summary %>%
+              select(-c(AniBirthday, AniGenId, AniMotherLifeNumber, AniId, milk_production_start_date, milk_production_end_date, lactation_duration, total_milk_production, avg_daily_yield, early_lactation_yield, mid_lactation_yield, delta_early_mid_yield, mean_fat_percent, mean_protein_percent, dry_off_date, dry_off_interval, customer_id, date, still_milking, est_deliver_total_milk_L, est_deliver_avg_daily_yield, est_deliver_early_lactation_yield,  est_deliver_mid_lactation_yield)),
+            by = c("AniLifeNumber", "InsLacId" = "LacId"))
 
 # Checks
 dim(insem_lactation)
 colnames(insem_lactation)
 
-cache(lactation_summary)
 
 # Join lactation and insemination data to the pregnancy data
 insem_lac_preg <- insem_lactation %>%
-  left_join(pregnancy, by = c("InsId" = "PreInsId"), relationship = "many-to-many") %>%
-  select(-c(AniId.y, AniBirthday)) %>%
-  rename(AniId = AniId.x)
+  left_join(pregnancy,
+  by = c("InsId" = "PreInsId"), relationship = "many-to-many")
 
 # Checks
 dim(insem_lac_preg)
@@ -178,22 +176,12 @@ insem_lac_preg_flagged <- insem_lac_preg %>%
 insem_lac_preg <- insem_lac_preg_flagged
 
 # identify failed pregnancy after confirmation
-preg_confirmed <- insem_lac_preg %>%
-  filter(!is.na(PreDate), !is.na(LacCalvingDate))
-
-preg_successful <- preg_confirmed %>%
-  group_by(AniLifeNumber, LacCalvingDate) %>%
-  arrange(PreDate) %>%
-  slice_tail(n = 1) %>%
-  ungroup() %>%
-  mutate(successful_pregnancy = TRUE) %>%
-  select(InsId, successful_pregnancy) # Only keep flag and InsId for join
-
 insem_lac_preg <- insem_lac_preg %>%
-  left_join(preg_successful, by = "InsId") %>%
-  mutate(successful_pregnancy = if_else(is.na(successful_pregnancy), FALSE, successful_pregnancy))
-
+  mutate(
+    successful_pregnancy = !is.na(PreDate) & !is.na(LacCalvingDate)
+  )
 
 # Save the de-duped dataset (insemination * lactation_summary * pregnancy)
 write.csv(insem_lac_preg, here("data", "insem_lac_preg.csv"))
 saveRDS(insem_lac_preg, file = here::here("data", "insem_lac_preg.rds"))
+cache("insem_lac_preg")

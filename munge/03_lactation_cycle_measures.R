@@ -1,49 +1,53 @@
-# Calculate measures by lactation cycle:
-# - age_at_calving
-# - Total number of artificial insemination attempts
-# - Number of failed artificial insemination attempts
-# - Ratio: successful / total insemination attempts
-# - Number of failed pregnancies
-# - Total Milk Yield (liters)
-# - avg_daily_yield
-# - early_lactation_yield : first 30 days
-# - mid_lactation_yield : subsequent 60 days
-# - delta_early_mid_yield : Difference between the first 30 days to next 60 days of milk production (liters)
-# - Avg percent fat
-# - Avg percent protein
-# - is_final_cycle : Flag for last lactation cycle (?)
-# - calving_to_first_insem_days
-# - endmilk_to_exit_days
+# ─────────────────────────────────────────────────────────────────────────────
+# Script Name: 03-lactation_metrics.R
+# Author: Ashley Sanders
+# Date Created: 2025-07-10
+# Last Updated: 2025-07-23
+# Project: Herd Management Strategy Analysis – Dairy Cow Lactation Cycle Metrics
+#
+# Description:
+# This script generates per-lactation-cycle metrics for dairy cows using joined
+# lactation, insemination, and reproductive outcome data. It computes performance
+# and decision-related indicators used in profitability modeling and cluster analysis.
+#
+# Key Metrics Calculated (by lactation cycle):
+# - age_at_calving (months)
+# - n_insem: number of artificial insemination attempts
+# - n_failed_insem: number of failed insemination attempts
+# - n_failed_pregnancies: number of pregnancies that failed
+# - successful/total insemination ratio (implied via n_insem, n_failed_insem)
+# - calving_to_insem_days: days from calving to first insemination
+# - calving_interval_days: time between calvings
+# - dry_off_interval: time between milk end and next cycle
+# - last_lactation: flag for last lactation cycle (based on exit data)
+#
+# Milk Production Metrics (imported from SQL & estimated delivery):
+# - total_milk_production, avg_daily_yield
+# - early_lactation_yield, mid_lactation_yield
+# - delta_early_mid_yield
+# - mean_fat_percent, mean_protein_percent
+# - Estimated delivered milk using 0.959 correction factor for retained milk
+#
+# Identifiers Retained:
+# - AniId, AniLifeNumber, LacId, InsId, CalculatedLactationCycle
+#
+# Inputs:
+# - lactation_summary (from SQL output; contains milk metrics and dates)
+# - insem_lac_preg.rds (insemination and calving data, per cycle)
+# - HemAnimal (AniBirthday used for age calculations)
+#
+# Outputs:
+# - lactation_metrics: enhanced lactation-cycle level dataset cached to disk
+#
+# Dependencies:
+# - dplyr, lubridate, tidyr, stringr
+#
+# Notes:
+# - still_milking flag recalculated using exit_date and last milk_production_end_date
+# - Some failed inseminations not shown in insem_lac_preg; deeper reproductive record inspection needed
+# - Potential future enhancements: days_to_peak_yield
+# ─────────────────────────────────────────────────────────────────────────────
 
-# Consider calculating: days_to_peak_yield
-
-
-# Other variables to keep for correlation analysis
-# - lactation_duration
-# - dry_off_interval
-# - LacCalvingDate
-# - milk_production_start_date
-# - milk_production_end_date
-# - LacColostrumDate
-
-# Identifiers to keep
-# - AniId
-# - AniLifeNumber
-# - InsId
-# - LacId
-# - CalculatedLactationCycle
-# - RemLactation_LacNumber
-
-# Variables to consider joining from other data sets
-# - exit_date
-# - exit_code (exit information for correlation analysis with failed inseminations and failed pregnancies)
-# - slaughter date (for comparison with last milk_production_end_date to determine if the farmer fattened the cow before the sale to the Abbatoir => add a flag for "fattened" so we can compare profitability of this strategy)
-
-# NOTE: The insem_lac_preg dataset does NOT show multiple insemination attempts that never resulted in a pregnancy. This information should also be examined to create a complete picture for each cow, beyond lactation cycles
-
-# Data :
-# - lactation_summary_all_LacId (plus AniBirthday) from munge/02-reproduction.R.
-# - data/insem_lac_preg.rds
 
 # Load libraries
 library(dplyr)
@@ -55,17 +59,24 @@ library(stringr)
 clean_ani <- function(x) str_replace_all(str_trim(as.character(x)), " ", "")
 
 # Load necessary data
-insem_lac_preg <- readRDS(here::here("data", "insem_lac_preg.rds"))
+# insem_lac_preg is alreadyy in cache
 # lactation_summary is already in cache
 
-# Determine if the cow is still likely milking
+# Determine if the cow is likely still milking, clean id numbers, and calculate estimated conserved and delivered milk quantities
 lactation_summary <- lactation_summary %>%
   mutate(
+    AniLifeNumber = clean_ani(AniLifeNumber),
+    AniMotherLifeNumber = clean_ani(AniMotherLifeNumber),
     still_milking = if_else(
       is.na(exit_date) & milk_production_end_date %in% as.Date(c("2024-09-18", "2024-09-19")),
       TRUE,
       FALSE
-      )
+      ),
+    est_deliver_total_milk_L = total_milk_production * 0.959,
+    est_deliver_avg_daily_yield = avg_daily_yield * 0.959,
+    est_deliver_early_lactation_yield = early_lactation_yield * 0.959,
+    est_deliver_mid_lactation_yield = mid_lactation_yield * 0.959,
+    est_deliver_delta_lactation_yield = delta_early_mid_yield * 0.959
   )
 
 # Calculate age at calving for each lactation cycle
@@ -82,6 +93,7 @@ age_at_calving_dedup <- age_at_calving %>%
 
 lactation_metrics <- lactation_summary %>%
   left_join(age_at_calving_dedup, by = c("AniLifeNumber", "LacId"))
+
 
 # Number of inseminations per lactation cycle
 insem_per_lac <- insemination %>%
@@ -163,14 +175,18 @@ lactation_metrics <- lactation_metrics %>%
 
 # Number of failed pregnancies per lactation cycle
 failed_pregnancies <- insem_lac_preg %>%
-  group_by(AniLifeNumber, InsLacId) %>%
+  group_by(InsLacId) %>%
   summarise(
-    n_failed_pregnancies = sum(successful_pregnancy == FALSE),
-    .groups = "drop")
+    n_failed_pregnancies = sum(successful_pregnancy == FALSE, na.rm = TRUE),
+    .groups = "drop"
+  )
 
+# Then join this count back to lactation_metrics
 lactation_metrics <- lactation_metrics %>%
-  left_join(failed_pregnancies, by = c("AniLifeNumber", "LacId" = "InsLacId"))
-
+  left_join(failed_pregnancies, by = c("LacId" = "InsLacId")) %>%
+  mutate(
+    n_failed_pregnancies = replace_na(n_failed_pregnancies, 0)
+  )
 
 # Calculate the calving interval (time between one calving and the next)
 calving_interval <- lactation_metrics %>%
@@ -191,3 +207,5 @@ calving_interval <- calving_interval %>%
 
 lactation_metrics <- lactation_metrics %>%
   left_join(calving_interval, by = c("AniLifeNumber", "LacCalvingDate"))
+
+cache("lactation_metrics")

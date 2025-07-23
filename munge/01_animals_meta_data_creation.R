@@ -154,3 +154,11 @@ animals_meta_farm1 %>%
   filter(!is.na(slaughter_date) & is.na(exit_date)) %>%
   summarise(n_cows = n())
 
+# Create a subset of animal_health data for dairy cows
+animal_health <- animal_health %>%
+  mutate(AniLifeNumber = clean_ani(AniLifeNumber))
+
+dairy_health <- animal_health %>%
+  filter(AniLifeNumber %in% herd_ids)
+
+cache("dairy_health")

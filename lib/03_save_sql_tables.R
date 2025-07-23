@@ -169,6 +169,25 @@ pregnancy <- dbGetQuery(lely, "
 
 cache("pregnancy")
 
+# Health Data from Lely
+animal_health <- dbGetQuery(lely, "
+  SELECT
+  LimDisease.DisId,
+  LimDisease.DisDcaId,
+  LimDisease.DisName,
+  LimDisease.DisCurePeriod,
+  LimDisease.DisDescription,
+  HemDiagnoses.DiaAniId,
+  HemDiagnoses.DiaDate,
+  HemDiagnoses.DiaRemarks,
+  HemDiagnoses.DiaWithMilk,
+  HemDiagnoses.DiaWithMeat,
+  HemAnimal.AniId,
+  HemAnimal.AniLifeNumber
+  FROM LimDisease
+  LEFT JOIN HemDiagnoses ON LimDisease.DisId = HemDiagnoses.DiaDisId
+  LEFT JOIN HemAnimal ON HemDiagnoses.DiaAniId = HemAnimal.AniId")
+
 # Save animals_history table from Supabase for later use
 
 animals_history <- dbGetQuery(prod, "
@@ -379,3 +398,5 @@ animals_meta_farm1 <- lely_animal %>%
   left_join(animals_meta_farm1, by = c("AniLifeNumber" = "animal"))
 
 cache("animals_meta_farm1")
+
+
