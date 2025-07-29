@@ -237,7 +237,8 @@ animals_slaughter <- dbGetQuery(prod, "
     date,
     weight,
     created_at,
-    customer_id
+    customer_id,
+    selling_price
   FROM animals_slaughter
   ORDER BY national_number, date")
 
