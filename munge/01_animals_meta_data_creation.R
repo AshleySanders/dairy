@@ -150,7 +150,7 @@ cat("Missing exit_code: ", sum(is.na(animals_meta_farm1$exit_code)), "\n")
 cat("Missing exit_date: ", sum(is.na(animals_meta_farm1$exit_date)), "\n")
 
 # Check to ensure that all cows who have a slaughter date have an exit date
-animals_meta_farm1 %>%
+dairy_meta_farm1 %>%
   filter(!is.na(slaughter_date) & is.na(exit_date)) %>%
   summarise(n_cows = n())
 
