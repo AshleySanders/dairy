@@ -46,7 +46,10 @@ milk_prod_summary_by_cow <- full_milk_by_cow %>%
 # Join everything into cow_outcomes
 
 cow_outcomes <- cow_outcomes %>%
-  left_join(milk_prod_summary_by_cow, by = "AniLifeNumber")
+  left_join(milk_prod_summary_by_cow, by = "AniLifeNumber") %>%
+  left_join(animals_slaughter_farm1, by = c("AniLifeNumber" = "national_number"))
+
+
 
 # Save or View the result ---
 saveRDS(cow_outcomes, file = here::here("data", "cow_outcomes.rds"))

@@ -209,3 +209,4 @@ lactation_metrics <- lactation_metrics %>%
   left_join(calving_interval, by = c("AniLifeNumber", "LacCalvingDate"))
 
 cache("lactation_metrics")
+write.csv(lactation_metrics, here("data", "lactation_metrics.csv"))

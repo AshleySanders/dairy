@@ -58,11 +58,11 @@ dairy_health_problems <- dairy_health_problems %>%
 cow_health_summary <- dairy_health_problems %>%
   group_by(AniLifeNumber) %>%
   summarise(
-    n_health_problems    = n(),                                          # total health events
-    recovery_duration    = sum(DisCurePeriod, na.rm = TRUE),             # total days under treatment
-    date_last_diagnosis  = max(DiaDate, na.rm = TRUE),                   # latest event date
-    last_diagnosis       = DisName[which.max(DiaDate)],                 # issue corresponding to latest date
-    .groups              = "drop"
+    n_health_problems    = n(),                                 # total health events
+    recovery_duration    = sum(DisCurePeriod, na.rm = TRUE),    # total days under treatment
+    date_last_diagnosis  = max(DiaDate, na.rm = TRUE),          # latest event date
+    last_diagnosis       = DisName[which.max(DiaDate)],         # issue corresponding to latest date
+    .groups = "drop"
   )
 
 # Cache final summary table for joining

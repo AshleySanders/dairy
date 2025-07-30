@@ -43,51 +43,17 @@ farm_id <- "16450bc2-f930-4052-a3f7-a602646e64cc"
 animals_history_farm1 <- animals_history %>%
   filter(customer_id == farm_id)
 
-animals_history_farm1 <-animals_history_farm1 %>%
-  mutate(date = as.Date(date))
-
 animals_history_farm1 <- animals_history_farm1 %>%
   filter(date < as.Date("2024-09-19")) # limit this dataframe to match the data coming from the last Lely back-up
 
 animals_history_farm1 <- animals_history_farm1 %>%
   distinct() %>%
-  mutate(national_number = clean_ani(animal)) %>%
+  mutate(national_number = clean_ani(animal),
+         date = as.Date(date),
+         entry_date = as.Date(entry_date),
+         exit_date = as.Date(exit_date)) %>%
   select(-animal)
 
-animals_farm1 <- animals %>%
-  filter(customer_id == farm_id)
-
-animals_farm1 <- animals_farm1 %>%
-  mutate(national_number = clean_ani(national_number)) %>%
-  distinct() %>%
-  select(national_number, race, customer_id, birth_date, mother, country_code)
-
-animals_meta_farm1 <- animals_history_farm1 %>%
-  select(national_number, category, customer_id, date, entry_code, entry_date, exit_code, exit_date)
-
-animals_meta_farm1 <- animals_meta_farm1 %>%
-  left_join(animals_farm1 %>%
-              select(-customer_id),
-            by = "national_number")
-
-# --- Impute entry codes for cows born on the farm ---
-# Capture all national numbers of cows in the herd
-herd_ids <- unique(animals_meta_farm1$national_number)
-
-# Add an "N" entry_code for cows whose mothers were also in the herd
-animals_meta_farm1 <- animals_meta_farm1 %>%
-  mutate(
-    entry_code = if_else(
-      is.na(entry_code) & mother %in% herd_ids,
-      "N",
-      entry_code
-    ),
-    entry_date = if_else(
-      is.na(entry_date) & entry_code == "N",
-      birth_date,
-      entry_date
-    )
-  )
 
 # Add slaughter information
 animals_slaughter_farm1 <- animals_slaughter %>%
@@ -97,20 +63,10 @@ animals_slaughter_farm1 <- animals_slaughter %>%
          slaughter_date = as.Date(date)) %>%
   select(-c(created_at, customer_id, date))
 
-animals_meta_farm1 <- animals_meta_farm1 %>%
-  left_join(animals_slaughter_farm1,
-            by = "national_number")
 
-
-# clean dates
-animals_meta_farm1 <- animals_meta_farm1 %>%
-  mutate(date = as.Date(date),
-         birth_date = as.Date(birth_date),
-         entry_date = as.Date(entry_date),
-         exit_date = as.Date(exit_date))
 
 # Filter the metadata to dairy cows
-dairy_meta_farm1 <- animals_meta_farm1 %>%
+dairy_history_farm1 <- animals_history_farm1 %>%
   mutate(category = str_trim(category)) %>%
   filter(category != "MA") %>%
   arrange(national_number, desc(date)) %>%  # most recent record first
@@ -120,7 +76,7 @@ dairy_meta_farm1 <- animals_meta_farm1 %>%
 
 # Run any necessary manual correction from /lib
 
-cache("dairy_meta_farm1")
+cache("dairy_history_farm1")
 
 # Check the quality of animal national numbers and metadata in Lely
 HemAnimal <- HemAnimal %>%
@@ -129,30 +85,71 @@ HemAnimal <- HemAnimal %>%
          AniMotherLifeNumber = clean_ani(AniMotherLifeNumber)) %>%
   distinct()
 
-HemAnimal %>%
+dairy_meta_farm1 %>%
   count(AniLifeNumber) %>%
   filter(n > 1)
 
-lely_supa_animal_diff <- dairy_meta_farm1 %>%
-  anti_join(HemAnimal, by = c("national_number" = "AniLifeNumber"))
+# Capture all national numbers of cows in the herd
+herd_ids <- unique(HemAnimal$AniLifeNumber)
+
+dairy_history_farm1 <- dairy_history_farm1 %>%
+  filter(national_number %in% herd_ids)
+
+dairy_meta_farm1 <- HemAnimal %>%
+  left_join(dairy_history_farm1, by = c("AniLifeNumber" = "national_number"))
+
+# Add an "N" entry_code for cows whose mothers were also in the herd
+dairy_meta_farm1 <- dairy_meta_farm1 %>%
+  mutate(
+    entry_code = if_else(
+      is.na(entry_code) & AniMotherLifeNumber %in% herd_ids,
+      "N",
+      entry_code
+    ),
+    entry_date = if_else(
+      is.na(entry_date) & entry_code == "N",
+      AniBirthday,
+      entry_date
+    )
+  )
+
+dairy_meta_farm1 <- dairy_meta_farm1 %>%
+ # Compute a completeness score: count of non-missing important columns
+  rowwise() %>%
+  mutate(
+    completeness = sum(
+      !is.na(exit_date),
+      na.rm = TRUE
+    )
+  ) %>%
+  ungroup() %>%
+
+  # 3. For each cow, keep the row with the highest completeness
+  group_by(AniLifeNumber) %>%
+  slice_max(order_by = completeness, n = 1, with_ties = FALSE) %>%
+  ungroup() %>%
+  select(-completeness)
+
+# Limit the metadata table to cows with milking data within the date range of interest.
+valid_cow_ids <- unique(lactation_metrics$AniLifeNumber)
+
+dairy_meta_farm1 <- dairy_meta_farm1 %>%
+  filter(AniLifeNumber %in% valid_cow_ids)
 
 # ------------------------------------------------------------------------------
 # Quick Checks
 # ------------------------------------------------------------------------------
 
 # Check distribution of entry_code
-table(animals_meta_farm1$entry_code)
+table(dairy_meta_farm1$entry_code)
 
 # Count missing values
-cat("Missing entry_code: ", sum(is.na(animals_meta_farm1$entry_code)), "\n")
-cat("Missing entry_date: ", sum(is.na(animals_meta_farm1$entry_date)), "\n")
-cat("Missing exit_code: ", sum(is.na(animals_meta_farm1$exit_code)), "\n")
-cat("Missing exit_date: ", sum(is.na(animals_meta_farm1$exit_date)), "\n")
+cat("Missing entry_code: ", sum(is.na(dairy_meta_farm1$entry_code)), "\n")
+cat("Missing entry_date: ", sum(is.na(dairy_meta_farm1$entry_date)), "\n")
+cat("Missing exit_code: ", sum(is.na(dairy_meta_farm1$exit_code)), "\n")
+cat("Missing exit_date: ", sum(is.na(dairy_meta_farm1$exit_date)), "\n")
 
-# Check to ensure that all cows who have a slaughter date have an exit date
-dairy_meta_farm1 %>%
-  filter(!is.na(slaughter_date) & is.na(exit_date)) %>%
-  summarise(n_cows = n())
+cache("dairy_meta_farm1")
 
 # Create a subset of animal_health data for dairy cows
 animal_health <- animal_health %>%
