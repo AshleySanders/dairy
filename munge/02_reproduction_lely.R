@@ -78,16 +78,13 @@ lactation_summary <- lactation_summary %>%
   mutate(AniId = as.integer(AniId))
 
 dairy_meta_farm1 <- dairy_meta_farm1 %>%
-  mutate(national_number = clean_ani(national_number))
+  mutate(AniLifeNumber = clean_ani(AniLifeNumber))
 
 lactation_summary <- lactation_summary %>%
   left_join(dairy_meta_farm1 %>%
-              select(-c(birth_date, country_code, mother, weight, slaughter_date, age_at_exit)),
-            by = c("AniLifeNumber" = "national_number"))
+              select(-AniId, AniActive),
+            by = "AniLifeNumber")
 
-lactation_summary <- lactation_summary %>%
-  left_join(HemAnimal %>%
-  select(AniLifeNumber, AniBirthday, AniMotherLifeNumber, AniGenId), by = "AniLifeNumber", relationship = "many-to-many")
 
 # Ensure correct data types
 glimpse(lactation_summary)
@@ -130,7 +127,7 @@ cache("lactation_summary")
 
 insem_lactation <- insemination %>%
   left_join(lactation_summary %>%
-              select(-c(AniBirthday, AniGenId, AniMotherLifeNumber, AniId, milk_production_start_date, milk_production_end_date, lactation_duration, total_milk_production, avg_daily_yield, early_lactation_yield, mid_lactation_yield, delta_early_mid_yield, mean_fat_percent, mean_protein_percent, dry_off_date, dry_off_interval, customer_id, date, still_milking, est_deliver_total_milk_L, est_deliver_avg_daily_yield, est_deliver_early_lactation_yield,  est_deliver_mid_lactation_yield)),
+              select(-c(AniBirthday, AniGenId, AniMotherLifeNumber, AniId, milk_production_start_date, milk_production_end_date, lactation_duration, total_milk_production, avg_daily_yield, early_lactation_yield, mid_lactation_yield, delta_early_mid_yield, mean_fat_percent, mean_protein_percent, dry_off_date)),
             by = c("AniLifeNumber", "InsLacId" = "LacId"))
 
 # Checks

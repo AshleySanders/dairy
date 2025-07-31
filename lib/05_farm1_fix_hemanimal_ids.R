@@ -61,11 +61,11 @@ HemAnimal %>%
 dairy_meta_farm1 <- dairy_meta_farm1 %>%
   mutate(
     exit_date = case_when(
-      national_number == "FR4404288320" ~ as.Date("2023-04-11"),
-      national_number =="FR4404288415" ~ as.Date("2023-07-31"),
+      AniLifeNumber == "FR4404288320" ~ as.Date("2023-04-11"),
+      AniLifeNumber =="FR4404288415" ~ as.Date("2023-07-31"),
       TRUE ~ exit_date
       ),
     exit_code = case_when(
-      national_number == "FR4404288320" ~ "B",
-      national_number == "FR4404288415" ~ "B",
+      AniLifeNumber == "FR4404288320" ~ "B",
+      AniLifeNumber == "FR4404288415" ~ "B",
       TRUE ~ exit_code))

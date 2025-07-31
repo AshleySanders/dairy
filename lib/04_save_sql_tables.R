@@ -221,14 +221,6 @@ animals <- dbGetQuery(prod, "
 
 cache("animals")
 
-animals_meta <- animals_history %>%
-  left_join(animals, by = c("animal" = "national_number"))
-
-animals_meta <- animals_meta %>%
-  mutate(animal = clean_ani(animal))
-
-cache("animals_meta")
-
 
 # Save animals_slaughter table from Supabase for later use
 animals_slaughter <- dbGetQuery(prod, "
@@ -353,8 +345,6 @@ gl_entries <- dbGetQuery(prod, "
 		invoice_id
 	FROM gl_entries")
 
-cache("gl_entries")
-
 # Grand Livre entries for the first farm in the analysis
 
 gl_entries_farm1 <- dbGetQuery(prod, "
@@ -380,24 +370,5 @@ farm1_gl_credits <- gl_entries_farm1 %>%
 
 cache("farm1_gl_credits")
 
-# Prepare a dataframe with each cow's history and mother's national number (AniLifeNumber)
-
-animals_meta_farm1 <- animals_meta %>%
-  filter(customer_id == "16450bc2-f930-4052-a3f7-a602646e64cc",
-         race == "66") %>%
-  mutate(animal = clean_ani(animal),
-         entry_date = as.Date(entry_date),
-         exit_date = as.Date(exit_date)) %>%
-  select(animal, entry_code, entry_date, exit_code, exit_date) %>%
-  distinct(animal, .keep_all = TRUE)
-
-lely_animal <- HemAnimal %>%
-  mutate(AniLifeNumber = clean_ani(AniLifeNumber),
-         AniMotherLifeNumber = clean_ani(AniMotherLifeNumber))
-
-animals_meta_farm1 <- lely_animal %>%
-  left_join(animals_meta_farm1, by = c("AniLifeNumber" = "animal"))
-
-cache("animals_meta_farm1")
 
 

@@ -118,5 +118,6 @@ cow_features <- cow_features %>%
 
 # Save or View the result ---
 cache("cow_features")
+saveRDS(cow_features, here("data", "cow_features.rds"))
 write.csv(cow_features, here("data", "cow_features.csv"), row.names = TRUE)
 
