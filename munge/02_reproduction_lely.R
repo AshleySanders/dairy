@@ -143,7 +143,7 @@ insem_lac_preg <- insem_lactation %>%
 # Checks
 dim(insem_lac_preg)
 colnames(insem_lac_preg)
-View(insem_lac_preg %>% filter(AniLifeNumber == "FR4404288134")) # visual exam
+# View(insem_lac_preg %>% filter(AniLifeNumber == "FR4404288134")) # visual exam
 
 # De-duplicate when there are multiple pregnancy confirmation dates
 

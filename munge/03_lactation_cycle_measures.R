@@ -117,7 +117,7 @@ lactation_metrics %>%
 mystery_NAs <- lactation_metrics %>%
   filter(is.na(n_insem), RemLactation_LacNumber > 1)
 
-View(mystery_NAs) # All cows who are still lactating are missing next insemination data
+# View(mystery_NAs) # All cows who are still lactating are missing next insemination data
 
 # Create an indicator for first pregnancies. Create a flag to indicate why n_insem is NA
 lactation_metrics <- lactation_metrics %>%
