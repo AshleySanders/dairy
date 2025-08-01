@@ -1,7 +1,9 @@
-# Factors that influence milk production
+# Exploration of individual factors that influence milk production
 # - Age at calving
 # - Lactation duration
 # - Dry-off interval
+# - Interval between calving and artificial insemination
+# - Interval between calvings
 
 library(car)
 library(FSA)
@@ -10,7 +12,7 @@ library(splines)
 library(pwr)
 
 # --- Age at Calving ---
-# 1. Split ages of cows into groups
+# Split ages of cows into groups
 lactation_metrics <- lactation_metrics %>%
   mutate(
     age_at_calving_yrs = case_when(
@@ -33,7 +35,7 @@ lactation_metrics <- lactation_metrics %>%
     )
   )
 
-# --- Check assumptions to determine appropriate test type ---
+# Check assumptions to determine appropriate test type
 # Number of observations in each group
 table(lactation_metrics$age_at_calving_yrs)
 
@@ -283,7 +285,7 @@ fit3 <- lm(next_yield ~ bs(dry_off_interval, knots = c(45, 75)) + age_at_calving
 
 summary(fit3)
 
-# --- Measure statistical power in dry-off interval analysis ---
+# Measure statistical power in dry-off interval analysis ---
 # Fit the ANOVA & pull out sums of squares
 res.aov <- aov(next_yield ~ dry_bin, data = df2)
 ss <- summary(res.aov)[[1]]$`Sum Sq`
@@ -323,3 +325,63 @@ pwr.anova.test(
   power = 0.80
 )
 
+
+# --- Interval between calving and artificial insemination ---
+df3 <- lactation_metrics %>%
+  filter(!is.na(calving_to_insem_days)) # drop NAs
+
+# Spearman correlation (robust to non-normality)
+cor.test(df3$calving_to_insem_days,
+         df3$total_milk_production,
+         method = "spearman")
+
+# Visual examination of the relationship
+ggplot(df3, aes(x = calving_to_insem_days, y = total_milk_production)) +
+  geom_point(alpha = 0.4) +
+  geom_smooth(method = "loess", se = FALSE, color = "steelblue") +
+  labs(
+    x = "Days from Calving to First AI",
+    y = "Total Lactation Yield (L)",
+    title = "Total Milk vs Calving-to-AI Interval") +
+  theme_classic()
+
+# Examine a potential linear relationship
+fit4 <- lm(
+  total_milk_production ~ calving_to_insem_days +
+    age_at_calving,
+  data = df3
+)
+summary(fit4)
+
+df3_aug <- augment(fit4, data = df3)
+
+ggplot(df3_aug, aes(x = calving_to_insem_days, y = total_milk_production)) +
+  geom_point(alpha = 0.6) +
+  geom_line(aes(y = .fitted), color = "red", size = 1) +
+  labs(
+    x = "Days from Calving to First AI",
+    y = "Total Milk Yield (L)",
+    title = "Total Milk Production vs Calving-to-AI Interval") +
+  theme_classic()
+
+# --- Calving interval ---
+df_ci <- lactation_metrics %>%
+  filter(!is.na(calving_interval_days)) # Remove NAs
+
+# plot total milk vs calving interval
+ggplot(df_ci, aes(x = calving_interval_days, y = total_milk_production)) +
+  geom_point(alpha = 0.4) +
+  geom_smooth(method = "loess", se = FALSE, color = "steelblue") +
+  labs(
+    x = "Days Between Calvings",
+    y = "Total Milk Yield (L)",
+    title = "Total Yield vs Calving Interval") +
+  theme_classic()
+
+# Mixed Effects Model to compare each individual cow's yield from cycle to cycle and its relation to calving intervals
+
+library(lme4)
+m1 <- lmer(
+  total_milk_production ~ calving_interval_days + (1 | AniLifeNumber), data = df_ci
+)
+summary(m1)

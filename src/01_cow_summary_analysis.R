@@ -168,7 +168,7 @@ ggplot(cow_features, aes(x=AniBirthday, y = avg_total_milk)) +
     axis.line = element_line("black")
   )
 
-# 9. Milk production over time
+# Milk production over time
 ggplot(cow_features, aes(x=exit_date, y = avg_total_milk)) +
   geom_point() +
   geom_smooth(method = "lm") +
@@ -182,6 +182,12 @@ ggplot(cow_features, aes(x=exit_date, y = avg_total_milk)) +
     panel.grid.minor = element_blank(),
     axis.line = element_line("black")
   )
+
+# 9. Milk production summary
+summary(cow_features$avg_total_milk)
+
+boxplot(cow_features$avg_total_milk, horizontal = TRUE,
+        xlab = "Average Milk Production per Cow per Lactation (L)")
 
 # 10. Lifespan of Cows
 summary(cow_features$age_at_exit)
