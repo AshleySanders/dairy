@@ -1,0 +1,1 @@
+# Culling analysis - use survival model to determine which factors are most predictive of culling

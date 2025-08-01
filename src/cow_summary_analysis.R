@@ -272,4 +272,3 @@ boxplot(lactation_metrics$calving_interval_days, horizontal = TRUE,
 
 
 
-# Culling analysis - use survival model to determine which factors are most predictive of culling
