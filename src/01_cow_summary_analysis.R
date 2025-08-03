@@ -5,6 +5,9 @@ library(ggpubr)
 # 1. purchased or raised on the farm ?
 table(cow_features$entry_code)
 
+View(cow_features %>%
+       filter(is.na(entry_code)))
+
 # 2. Distribution + mean of age at first calving
 summary(cow_features$age_at_first_calving)
 hist(cow_features$age_at_first_calving,
@@ -17,11 +20,63 @@ cow_features %>% identify_outliers(age_at_first_calving) %>% select(c(AniBirthda
 
 # Remove outliers before calculating the summary stats for age at first calving
 
-cow_features %>%
-  filter(AniBirthday > as.Date("2016-11-01")) %>%
-  pull(age_at_first_calving) %>%
-  summary() %>%
-  hist()
+valid_calving <- cow_features %>%
+  filter(cohort != "pre-2016",
+         entry_code != "A",
+         !is.na(AniLifeNumber),
+         AniLifeNumber != "")
+
+summary(valid_calving$age_at_first_calving)
+
+hist(valid_calving$age_at_first_calving,
+     main = "Age at First Calving",
+     xlab = "Age (months)",
+     ylab = "Number of Cows")
+
+# Examine distribution & outliers of cow's age at first insemination (according to Lely)
+first_insem_outliers <- cow_features %>% identify_outliers(age_at_first_insem) %>%
+  select(AniLifeNumber, AniBirthday, cohort, age_at_first_insem, age_at_first_calving, entry_code)
+
+View(first_insem_outliers %>% filter(cohort != "pre-2016"))
+
+summary(valid_calving$age_at_first_insem)
+
+hist(valid_calving$age_at_first_insem, main = "Age at First AI (Months)")
+
+boxplot(valid_calving$age_at_first_insem, horizontal = TRUE, xlab = "Age at First AI (Months)")
+
+# Examine relationships between first insemination (successful or not) and first calving ages
+ggplot(valid_calving, aes(x = InsDate, y = age_at_first_insem)) +
+  geom_point(alpha = 0.4, color = "steelblue") +
+  labs(
+    title = "Age at First AI Over Time",
+    x = "Insemination Date",
+    y = "Age (Months)"
+  ) +
+  theme_classic()
+
+ggplot(valid_calving, aes(x = age_at_first_insem, y = age_at_first_calving)) +
+  geom_point(alpha = 0.4, color = "darkgreen") +
+  geom_smooth(method = "lm") +
+  labs(
+    x = "Age at First AI (Months)",
+    y = "Age at First Calving (Months)"
+  ) +
+  theme_classic()
+
+# Examine relationships between first successful insemination & first calving ages
+valid_insem <- valid_calving %>%
+  filter(age_first_successful_insem < 25)
+
+ggplot(valid_insem, aes(x = age_first_successful_insem, y = age_at_first_calving)) +
+  geom_point(alpha = 0.4, color = "purple") +
+  geom_smooth(method = "lm") +
+  labs(
+    x = "Age at First Successful AI (Months)",
+    y = "Age at First Calving (Months)"
+  ) +
+  theme_classic()
+
 
 # 3. Number of inseminations needed per lactation cycle
 summary(cow_features$avg_insem)
@@ -45,10 +100,51 @@ summary(cow_features$avg_dry_interval)
 boxplot(cow_features$avg_dry_interval, horizontal = TRUE,
         main = "Average Dry-Off Intervals by Cow",
         xlab= "Number of Days")
+
+valid_dry_off <- lactation_metrics %>%
+  filter(
+    !is.na(dry_off_interval),
+    AniLifeNumber != ""
+  )
+
+ggplot(valid_dry_off, aes(x = lactation_duration, y = dry_off_interval)) +
+  geom_point(alpha = 0.4, color = "steelblue") +
+  geom_smooth(method = "gam") +
+  labs(
+    title = "Dry-Off Interval as a Function of Lactation Duration",
+    x = "Lactation Duration (Days)",
+    y = "Dry-Off Interval (Days)"
+  ) +
+  theme_classic()
+
+
+# Missing Data Analysis
+na_dry_off <- lactation_metrics %>%
+  filter(is.na(dry_off_interval),
+         still_milking == FALSE,
+         last_lactation == FALSE,
+         AniLifeNumber != "")
+
+# Outlier Identification
 cow_features %>% identify_outliers(avg_dry_interval) %>%
   select(c(AniBirthday, avg_dry_interval)) %>%
   print(n=28)
 
+# Outlier Analysis
+dry_off_outliers <- lactation_metrics %>% identify_outliers(dry_off_interval)
+nrow(dry_off_outliers)
+
+View(dry_off_outliers)
+
+# Examine relationship between number of inseminations and failed pregnancies for dry_off interval outliers
+failed_conception <- table(dry_off_outliers$n_insem, dry_off_outliers$n_failed_pregnancies)
+failed_conception
+
+fisher.test(failed_conception, simulate.p.value = TRUE)
+
+# Examine relationship between number of failed inseminations and failed pregnancies for dry-off interval outliers.
+insem_preg_fail <- table(dry_off_outliers$n_failed_insem, dry_off_outliers$n_failed_pregnancies)
+fisher.test(insem_preg_fail, simulate.p.value = TRUE)
 
 # 6. Fattening or immediate sale to abattoir?
 summary(cow_features$endmilk_to_exit_days)

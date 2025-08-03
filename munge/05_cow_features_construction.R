@@ -63,7 +63,7 @@ cow_lactation_summary <- lactation_metrics %>%
     latest_lactation_date     = max(milk_production_start_date, na.rm = TRUE),
 
     # animal descriptors (will be recycled per group)
-     AniBirthday               = first(AniBirthday),
+    AniBirthday               = first(AniBirthday),
     AniGenId                  = first(AniGenId),
 
     .groups = "drop"
@@ -82,6 +82,31 @@ cow_insem_summary <- lactation_metrics %>%
     .groups = "drop"
   )
 
+cow_age_at_first_insem <- insem_lac_preg %>%
+  arrange(AniLifeNumber, InsDate) %>%
+  group_by(AniLifeNumber) %>%
+  slice(1) %>%
+  ungroup() %>%
+  mutate(
+    age_at_first_insem = interval(as.Date(AniBirthday), as.Date(InsDate)) %/% months(1),
+    first_insem_date = InsDate
+  ) %>%
+  select(c(AniLifeNumber, age_at_first_insem, InsDate)) %>%
+  filter(AniLifeNumber %in% valid_cow_ids)
+
+cow_age_first_success_insem <- insem_lac_preg %>%
+  filter(successful_insem == TRUE) %>%
+  arrange(AniLifeNumber, InsDate) %>%
+  group_by(AniLifeNumber) %>%
+  slice(1) %>%
+  ungroup() %>%
+  mutate(
+    age_first_successful_insem = interval(AniBirthday, InsDate) %/% months(1)
+  ) %>%
+  select(AniLifeNumber, age_first_successful_insem) %>%
+  filter(AniLifeNumber %in% valid_cow_ids)
+
+
 
 # Join everything into cow_features ---
 cow_features <- cow_lactation_summary %>%
@@ -90,6 +115,8 @@ cow_features <- cow_lactation_summary %>%
   left_join(exit_age, by = "AniLifeNumber") %>%
   left_join(endmilk_to_exit, by = "AniLifeNumber") %>%
   left_join(cow_insem_summary, by = "AniLifeNumber") %>%
+  left_join(cow_age_at_first_insem, by = "AniLifeNumber") %>%
+  left_join(cow_age_first_success_insem, by = "AniLifeNumber") %>%
   left_join(cow_health_summary, by = "AniLifeNumber") %>%
   left_join(animals_slaughter_farm1, by = c("AniLifeNumber" = "national_number"))
 
