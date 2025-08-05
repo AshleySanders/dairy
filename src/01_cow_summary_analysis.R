@@ -146,6 +146,55 @@ fisher.test(failed_conception, simulate.p.value = TRUE)
 insem_preg_fail <- table(dry_off_outliers$n_failed_insem, dry_off_outliers$n_failed_pregnancies)
 fisher.test(insem_preg_fail, simulate.p.value = TRUE)
 
+# --- Examine interval between successful insemination and dry-off date ---
+
+# interval between successful insemination & dry-off date
+# For each cycle (InsLacId), get the first successful AI date
+ins_per_cycle <- insem_lac_preg %>%
+  filter(successful_insem, successful_pregnancy) %>%
+  group_by(AniLifeNumber, InsLacId, CalculatedLactationCycle) %>%
+  summarise(
+    first_success = min(as.Date(InsDate)),
+    .groups = "drop"
+  )
+
+# Shift it forward one cycle so it matches the next lactation’s index
+cycle_ins_match <- ins_per_cycle %>%
+  mutate(
+    CalculatedLactationCycle = CalculatedLactationCycle + 1L
+  )
+
+# Join to your lactation_metrics and compute the intervals
+lactation_with_intervals <- lactation_metrics %>%
+  mutate(
+    LacCalvingDate = as.Date(LacCalvingDate),
+    dry_off_date   = as.Date(dry_off_date)
+  ) %>%
+  left_join(
+    cycle_ins_match,
+    by = c("AniLifeNumber", "CalculatedLactationCycle")
+  ) %>%
+  mutate(
+    # Days from the AI (in cycle N) to the calving that starts cycle N+1
+    insem_to_calving = as.integer(LacCalvingDate - first_success),
+    # Days from that same AI to the dry-off of cycle N+1
+    insem_to_dryoff  = as.integer(dry_off_date   - first_success)
+  )
+
+lactation_with_intervals %>%
+  select(AniLifeNumber, CalculatedLactationCycle,
+         first_success, LacCalvingDate, dry_off_date,
+         insem_to_calving, insem_to_dryoff)
+
+summary(lactation_with_intervals$insem_to_calving)
+
+boxplot(lactation_with_intervals$insem_to_calving, horizontal = TRUE,
+        main = "Interval Between Successful AI to Calving (Days)")
+
+summary(lactation_with_intervals$insem_to_dryoff)
+
+boxplot(lactation_with_intervals$insem_to_dryoff, horizontal = TRUE, main = "Interval Between Successful AI to Dry-Off")
+
 # 6. Fattening or immediate sale to abattoir?
 summary(cow_features$endmilk_to_exit_days)
 ggplot(data = cow_features, aes(x=exit_date, y=endmilk_to_exit_days)) +
@@ -165,6 +214,25 @@ boxplot(cow_features$endmilk_to_exit_days, horizontal = TRUE,
 
 cow_features %>% identify_outliers(endmilk_to_exit_days) %>%
   select(c(AniLifeNumber, AniBirthday, exit_date, endmilk_to_exit_days))
+
+# Examine a possible change in Farm 1's strategy in mid-2024
+
+cow_features_2024 <- cow_features %>%
+  filter(exit_date > as.Date("2024-01-01"))
+
+ggplot(data = cow_features_2024, aes(x = exit_date, y = endmilk_to_exit_days)) +
+  geom_point(alpha = 0.6, size = 3, color = "steelblue") +
+  geom_smooth(method = "gam") +
+  labs(title = "Number of Days Between the Last Milking and Exit in 2024",
+       x = "Exit Date",
+       y = "Number of Days") +
+  theme_classic()
+
+# Doublecheck and verify exit dates with slaughter dates.
+exit_date_check <- cow_features %>%
+  mutate(
+    exit_check = interval(as.Date(slaughter_date), as.Date(exit_date)) %/% days(1)
+  )
 
 # 7. Average number of days in each cow’s lactation cycle over the lifetime of the cow
 summary(cow_features$avg_lactation_duration)
@@ -371,6 +439,90 @@ hist(lactation_metrics$calving_interval_days,
 boxplot(lactation_metrics$calving_interval_days, horizontal = TRUE,
         main = "Interval Between Calvings",
         xlab = "Number of Days")
+
+# 13. The script for the milk yield analysis is available in 02_single_variable_milk_yield_analysis.R
+
+# 14. Health Problem Analysis
+405 - sum(is.na(cow_features$n_health_problems))
+
+summary(cow_features$n_health_problems)
+
+boxplot(cow_features$n_health_problems, horizontal = TRUE,
+        main = "Number of Health Problems")
+
+cow_features <- cow_features %>%
+  mutate(
+    diagnosis_to_exit = interval(as.Date(date_last_diagnosis), as.Date(exit_date)) %/% days(1)
+  )
+
+summary(cow_features$diagnosis_to_exit)
+
+# Simplify last diagnosis
+
+cow_features <- cow_features %>%
+  mutate(
+    simplified_last_diagnosis = case_when(
+
+      # — Mastitis of any form —
+      str_detect(last_diagnosis, regex("mastitis", ignore_case=TRUE)) ~ "mastitis",
+
+      # — Other udder issues (non-mastitis) —
+      str_detect(last_diagnosis, regex("udder|teat|other disorders of the udder", ignore_case=TRUE)) ~ "udder disorder",
+
+      # — Lameness / hoof & joint —
+      str_detect(last_diagnosis, regex("lameness|pododermatitis|phlegmon|double sole|arthritis|parage", ignore_case=TRUE)) ~ "lameness",
+
+      # — Reproductive & calving problems —
+      str_detect(last_diagnosis, regex("fertility|ovarial cysts|retentio secundinarum|diseases related to calving
+                                         |sectio caesarea|endometritis|dystocia|abortion|interoestrus|metritis",
+                                       ignore_case=TRUE)) ~ "reproductive",
+
+      # — Metabolic diseases —
+      str_detect(last_diagnosis, regex("ketosis|acetonemia|metabolic|hyperketonemia", ignore_case=TRUE)) ~ "metabolic",
+
+      # — Parasitic —
+      str_detect(last_diagnosis, regex("trematode|parasite", ignore_case=TRUE)) ~ "parasitic",
+
+      # — Respiratory / systemic infections —
+      str_detect(last_diagnosis, regex("pneumonia|bronchopneumonia|infection|fever|abs[cç]es", ignore_case=TRUE)) ~ "infection",
+
+      # — Digestive (abomasal displacement, for example) —
+      str_detect(last_diagnosis, regex("abomasal displacement", ignore_case=TRUE)) ~ "digestive",
+
+      # — None / no abnormality —
+      str_detect(last_diagnosis, regex("no abnormality", ignore_case=TRUE)) ~ "none",
+
+      # — Explicit “none recorded” —
+      is.na(last_diagnosis) ~ NA_character_,
+
+      # — Everything else —
+      TRUE ~ "other"
+    )
+  )
+
+last_diagnosis <- table(cow_features$simplified_last_diagnosis)
+
+cow_features %>%
+  na.omit(cols = "simplified_diagnosis") %>%   # drop NA diagnoses
+  # count cows by simplified diagnosis
+  count(simplified_last_diagnosis, name = "n") %>%
+  # Arrange descending and set factor levels
+  arrange(n) %>%
+  mutate(
+    simplified_last_diagnosis = fct_inorder(simplified_last_diagnosis)
+  ) %>%
+  # Plot
+  ggplot(aes(x = simplified_last_diagnosis, y = n)) +
+  geom_col(fill = "steelblue") +
+  coord_flip() +
+  labs(
+    x = NULL,
+    y = "Number of Cows",
+    title = "Last Diagnosis"
+  ) +
+  theme_classic()
+
+
 
 
 

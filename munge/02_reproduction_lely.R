@@ -127,7 +127,7 @@ cache("lactation_summary")
 
 insem_lactation <- insemination %>%
   left_join(lactation_summary %>%
-              select(-c(AniBirthday, AniGenId, AniMotherLifeNumber, AniId, milk_production_start_date, milk_production_end_date, lactation_duration, total_milk_production, avg_daily_yield, early_lactation_yield, mid_lactation_yield, delta_early_mid_yield, mean_fat_percent, mean_protein_percent, dry_off_date)),
+              select(-c(AniBirthday, AniGenId, AniMotherLifeNumber, AniId, milk_production_start_date, milk_production_end_date, lactation_duration, total_milk_production, avg_daily_yield, early_lactation_yield, mid_lactation_yield, delta_early_mid_yield, mean_fat_percent, mean_protein_percent)),
             by = c("AniLifeNumber", "InsLacId" = "LacId"))
 
 # Checks

@@ -107,7 +107,6 @@ cow_age_first_success_insem <- insem_lac_preg %>%
   filter(AniLifeNumber %in% valid_cow_ids)
 
 
-
 # Join everything into cow_features ---
 cow_features <- cow_lactation_summary %>%
   left_join(dairy_meta_farm1 %>%
