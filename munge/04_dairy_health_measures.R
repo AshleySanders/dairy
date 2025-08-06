@@ -67,3 +67,4 @@ cow_health_summary <- dairy_health_problems %>%
 
 # Cache final summary table for joining
 cache("cow_health_summary")
+write.csv(dairy_health_problems, here("data", "dairy_health_problems.csv"))

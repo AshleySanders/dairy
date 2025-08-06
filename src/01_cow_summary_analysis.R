@@ -450,6 +450,10 @@ summary(cow_features$n_health_problems)
 boxplot(cow_features$n_health_problems, horizontal = TRUE,
         main = "Number of Health Problems")
 
+summary(cow_features$recovery_duration)
+boxplot(cow_features$recovery_duration, horizontal = TRUE,
+        main = "Total Number of Days Required for Recovery")
+
 cow_features <- cow_features %>%
   mutate(
     diagnosis_to_exit = interval(as.Date(date_last_diagnosis), as.Date(exit_date)) %/% days(1)
