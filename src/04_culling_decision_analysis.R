@@ -18,8 +18,8 @@
 #                    - C-index (via ranger OOB error)
 #                    - Kaplan–Meier curves by predicted risk group
 #                 6. Profiles characteristics of high- vs. low-risk cows.
-#                 7. Maps risk profiles back to actionable management
-#                    recommendations (potential culling triggers).
+#                 7. Maps risk profiles back to management decisions
+#                     (potential culling triggers).
 #
 # Inputs:
 #   - cow_features:           Cow-level metadata, including birth and exit dates.
@@ -51,13 +51,15 @@
 # Created:        2025-08-06
 # Last Updated:   2025-08-08
 # ------------------------------------------------------------------------------
-
 library(forcats)
 library(survival)
 library(ranger)
 library(car)
 library(ggplot2)
 library(tibble)
+library(fastshap)
+library(doParallel)
+library(parallel)
 
 # --- Feature Engineering ---
 # Create censoring flag and time-to-exit in days from birthdate
@@ -145,14 +147,16 @@ cow_survival <- cow_survival %>%
 
 
 # --- Fit random survival forest model ---
+cow_survival <- cow_survival %>%
+  mutate(insem_failed_interaction = n_insem * n_failed_pregnancies)
 
 # Create a survival object (event = 1 if the cow exited)
 surv_obj <- Surv(time = cow_survival$age_at_exit, event = cow_survival$censored == FALSE)
 
 # Fit RSF model with main predictors and one interaction term
 rsf_model <- ranger(
-  formula = surv_obj ~ total_milk_production + n_insem * n_failed_pregnancies +
-    age_at_calving + mastitis + fertility_issues + lameness,
+  formula = surv_obj ~ total_milk_production + n_insem + n_failed_pregnancies +
+    insem_failed_interaction + age_at_calving + mastitis + fertility_issues + lameness,
   data = cow_survival,
   mtry = 3,
   importance = "permutation",
@@ -200,6 +204,12 @@ cow_survival$risk_score <- 1 - mean_survival  # higher = more at risk
 # Assign quartile-based risk groups
 cow_survival_clean <- cow_survival %>%
   mutate(risk_group = ntile(risk_score, 4))  # quartiles
+
+# Join risk score and risk group to cow_features
+cow_features <- cow_features %>%
+  left_join(cow_survival_clean %>%
+              select(AniLifeNumber, risk_score, risk_group),
+            by = "AniLifeNumber")
 
 # Fit Kaplan-Meier survival curves by RSF risk group
 km_fit <- survfit(Surv(age_at_exit, !censored) ~ risk_group, data = cow_survival_clean)
@@ -272,3 +282,88 @@ cow_survival_clean %>%
     pct_lameness = mean(lameness, na.rm = TRUE),
     avg_age_at_calving = mean(age_at_calving, na.rm = TRUE)
   )
+
+# --- Extract SHAP values from the RSF to identify which variables increase each individual cow's risk score ---
+
+# Create a smaller model to calculate SHAP values
+rsf_model <- ranger(
+  formula = surv_obj ~ total_milk_production + n_insem + n_failed_pregnancies +
+    insem_failed_interaction + age_at_calving + mastitis + fertility_issues + lameness,
+  data = cow_survival,
+  mtry = 3,
+  importance = "permutation",
+  num.trees = 500,
+  splitrule = "logrank",
+  seed = 42
+)
+
+# Compute SHAP values for all cows
+
+# pick a reasonble number of workers
+n_cores <- min( max(1, parallel::detectCores() -1), 12 )
+cl <- makeCluster(n_cores)
+registerDoParallel(cl)
+set.seed(42) # reproducibility
+
+# Define predictor variable names (same as in the RSF model)
+ids <- cow_survival$AniLifeNumber
+predictors <- c("total_milk_production", "n_insem", "n_failed_pregnancies", "insem_failed_interaction", "age_at_calving", "mastitis", "fertility_issues", "lameness")
+
+X <- cow_survival %>% select(all_of(predictors))
+
+# quick sanity checks
+stopifnot(setequal(names(X), predictors))
+stopifnot(nrow(X) == length(ids))
+
+# wrapper: returns numeric risk score (1-mean survival)
+risk_fun <- function(object, newdata) {
+  pred <- predict(object, data = newdata)$survival
+  1 - rowMeans(pred)
+}
+
+# keep nsim moderate first; increase later if stable
+shap_values <- fastshap::explain(
+  object        = rsf_model,
+  feature_names = colnames(X),
+  pred_wrapper  = risk_fun,
+  X             = X,
+  nsim          = 50
+)
+
+# always stop the cluster
+parallel::stopCluster(cl)  # stop cluster
+
+# For each cow, find the variable with the largest positive SHAP value
+
+# Convert to tidy form and attach IDs
+shap_df <- as.data.frame(unclass(shap_values)) %>%  # drop "explain" class
+  setNames(colnames(X)) %>%
+  mutate(AniLifeNumber = ids) %>%
+  as_tibble()
+
+# Top driver per cow (handle NAs safely)
+top_driver <- shap_df %>%
+  pivot_longer(cols = all_of(predictors),
+               names_to = "variable", values_to = "shap_value") %>%
+  mutate(shap_value = replace_na(as.numeric(shap_value), 0)) %>%
+  group_by(AniLifeNumber) %>%
+  slice_max(order_by = shap_value, n = 1, with_ties = FALSE) %>%
+  ungroup()
+
+# Map to a readable reason and join back to cow_features
+reason_map <- c(
+  "total_milk_production" = "Low milk yield",
+  "n_insem"               = "High insemination count",
+  "n_failed_pregnancies"  = "Reproduction failure",
+  "age_at_calving"        = "Age at calving",
+  "mastitis"              = "Chronic mastitis",
+  "fertility_issues"      = "Fertility issues",
+  "lameness"              = "Lameness"
+)
+
+top_driver <- top_driver %>%
+  mutate(est_reason_for_culling = unname(reason_map[variable]))
+
+cow_features <- cow_features %>%
+  left_join(top_driver %>% select(AniLifeNumber, est_reason_for_culling),
+            by = "AniLifeNumber")
