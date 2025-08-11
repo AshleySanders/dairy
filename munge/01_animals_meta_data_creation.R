@@ -59,8 +59,17 @@ animals_history_farm1 <- animals_history_farm1 %>%
 animals_slaughter_farm1 <- animals_slaughter %>%
   filter(customer_id == farm_id) %>%
   distinct() %>%
-  mutate(national_number = clean_ani(national_number),
-         slaughter_date = as.Date(date)) %>%
+  mutate(AniLifeNumber = clean_ani(national_number),
+         slaughter_date = as.Date(date),
+         classification = case_when(
+           classification == "O=3" ~ "O-3",
+           classification == "P+2" ~ "P-2",
+           classification == "P+3" ~ "P-3",
+           classification == "P+4" ~ "P-4",
+           classification == "P=2" ~ "P-2",
+           classification == "P=3" ~ "P-3"
+           )
+         ) %>%
   select(-c(created_at, customer_id, date))
 
 

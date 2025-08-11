@@ -117,7 +117,7 @@ cow_features <- cow_lactation_summary %>%
   left_join(cow_age_at_first_insem, by = "AniLifeNumber") %>%
   left_join(cow_age_first_success_insem, by = "AniLifeNumber") %>%
   left_join(cow_health_summary, by = "AniLifeNumber") %>%
-  left_join(animals_slaughter_farm1, by = c("AniLifeNumber" = "national_number"))
+  left_join(animals_slaughter_farm1, by = "AniLifeNumber")
 
 # Replace NAs with 0s for 2 variables that come from cow_health_summary
 cow_features <- cow_features %>%
