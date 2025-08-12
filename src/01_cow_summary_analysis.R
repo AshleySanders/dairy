@@ -384,7 +384,7 @@ lactation_metrics %>% identify_outliers(calving_to_insem_days) %>%
 
 # Test to examine assumption of correlation between the 3 variables
 
-# Select only the 3 metrcis, drop any rows with NAs
+# Select only the 3 metrics, drop any rows with NAs
 tmp <- lactation_metrics %>%
   select(calving_to_insem_days, n_insem, n_failed_pregnancies) %>%
   na.omit()

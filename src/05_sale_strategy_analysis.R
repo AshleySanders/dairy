@@ -3,9 +3,10 @@
 library(mgcv)
 library(influence.ME)
 library(car)
+library(randomForest)
 
 # Data:
-# - cow_features
+# -> cow_features
 last_milking_weight <- read.csv(here("data", "last_milking_weight.csv")) # Generated in VSC
 
 last_milking_weight <- last_milking_weight %>%
@@ -31,20 +32,24 @@ cow_sales <- cow_sales %>%
               select(AniLifeNumber, MviWeight, LastMilkingDate),
             by = "AniLifeNumber")
 
+# read the data set in that contains the correct classifications that were previously missing
+cow_sales_classifications <- read_csv(here("data", "cow_sales_no_classification.csv"))
 
-# Estimate live weight at time of slaughter
-cow_sales <- cow_sales %>%
+cow_sales_updated <- cow_sales %>%
+  left_join(cow_sales_classifications %>% select(AniLifeNumber, classification),
+            by = "AniLifeNumber") %>%
   mutate(
-         est_dressing_percent = weight/MviWeight,
-         est_exit_weight = weight/0.5, # Based on data from Farm 1
-         est_weight_diff = est_exit_weight - MviWeight,
-         )
+    classification = coalesce(classification.x, classification.y)
+  ) %>%
+  select(-c(classification.x, classification.y))
 
-lm_full_weight <- lm(est_exit_weight ~ MviWeight + fattened + age_at_exit + cohort, data=cow_sales)
+cow_sales <- cow_sales_updated
 
-# View summary stats of last milking weight and estimate live weight at exit:
+
+
+# View summary stats of last milking weight and dressed weight:
 summary(last_weight$MviWeight)
-summary(cow_sales$est_exit_weight)
+summary(cow_sales$weight)
 
 # Initial, simple analysis of fattened versus unfattened revenue per kg
 table(cow_sales$fattened)
@@ -83,13 +88,24 @@ ggplot(data = cow_sales, aes(x = exit_date, y = price_per_kg)) +
   ) +
   theme_classic()
 
-ggplot(data = cow_sales, aes(x = endmilk_to_exit_days, y = price_per_kg, fill = classification)) +
+ggplot(data = cow_sales, aes(x = endmilk_to_exit_days, y = price_per_kg, fill = cohort)) +
   geom_point(alpha = 0.4) +
   geom_smooth(method = "gam") +
   labs(
-    title = "Sale Price per Kilograph as a Function of Fattening Time",
-    x = "Number of Days Between Last Milking and Exit",
-    y = "Price (€/kg)") +
+    title = "Sale Price per Kilogram Over Time",
+    x = "Days Between Last Milking and Exit",
+    y = "Sale Price (€/kg)"
+  ) +
+  theme_classic()
+
+ggplot(data = cow_sales, aes(x = endmilk_to_exit_days, y = selling_price, fill = cohort)) +
+  geom_point(alpha = 0.4) +
+  geom_smooth(method = "gam") +
+  labs(
+    title = "Total Sale Price by Cohort Over Time",
+    x = "Days Between Last Milking and Exit",
+    y = "Total Sale Price (€)"
+  ) +
   theme_classic()
 
 fattened_cows <- cow_sales %>%
@@ -101,7 +117,55 @@ unfattened_cows <- cow_sales %>%
 summary(fattened_cows$price_per_kg)
 summary(unfattened_cows$price_per_kg)
 
+summary(fattened_cows$weight)
+summary(unfattened_cows$weight)
+
+summary(fattened_cows$selling_price)
+summary(unfattened_cows$selling_price)
+
+boxplot(weight ~ fattened, data = cow_sales,
+        main = "Dressed Weight (kg) by Fattening Strategy")
+
+boxplot(selling_price ~ fattened, data = cow_sales,
+        main = "Total Sale Price (€) by Fattening Strategy")
+
+ggplot(data = cow_sales, aes(x=endmilk_to_exit_days, y = weight, color = cohort)) +
+  geom_point(alpha = 0.4) +
+  geom_smooth(method = "gam") +
+  labs(
+    title = "Weight by Number of Days between Last Milking & Exit"
+  ) +
+  theme_classic()
+
+ggplot(data = cow_sales, aes(x = exit_date, y = weight, color = fattened)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "gam") +
+  labs(
+    title = "Dressed Weight over Time",
+    x = "Exit Date",
+    y = "Dressed Weight (kg)"
+  ) +
+  theme_classic()
+
+ggplot(data = cow_sales, aes(x = exit_date, y = MviWeight, color = fattened)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "gam") +
+  labs(
+    title = "Last Milking Weight over Time",
+    x = "Exit Date",
+    y = "Weight (kg) at Last Milking"
+  ) +
+  theme_classic()
+
 t_test(price_per_kg ~ fattened, data = cow_sales, var.equal = TRUE, conf.level = 0.95)
+
+t_test(weight ~ fattened, data = cow_sales, var.equal = TRUE, conf.level = 0.95)
+
+t_test(selling_price ~ fattened, data = cow_sales, var.equal = TRUE, conf.level = 0.95)
+
+fisher.test(table(cow_sales$fattened, cow_sales$classification), simulate.p.value = TRUE)
+
+
 
 # Prepare data for GAM modeling
 cow_sales <- cow_sales %>%
@@ -146,4 +210,78 @@ print(outliers)
 
 gam.check(gam_model_i)
 
+
+# Create a new GAM model to understand if/how last milking weight, fattening strategy, exit_date, and classification may effect total selling price
+
+gam_model2 <- gam(
+  selling_price ~
+    s(as.numeric(exit_date)) +    # smooth trend over time
+    MviWeight +                   # linear effect of weight
+    fattened +                    # factor (TRUE/FALSE)
+    classification,               # factor
+  data = cow_sales,
+  method = "REML"
+)
+
+summary(gam_model2)
+plot(gam_model2)
+
+# Check assumptions
+vif(lm(selling_price ~ fattened + exit_date + MviWeight + classification, data = cow_sales))
+gam.check(gam_model2)
+
+plot(gam_model2$fitted.values, residuals(gam_model2))
+abline(h=0, col='red')
+
+# --- Examine all variables importance in predicting selling price ---
+rf_model <- randomForest(selling_price ~ MviWeight + exit_date + age_at_exit + fattened + endmilk_to_exit_days + classification + cohort, data = cow_sales, importance = TRUE)
+
+importance(rf_model)
+varImpPlot(rf_model)
+
+# Explore effects of age on selling price
+cow_sales <- cow_sales %>%
+  mutate(
+    exit_age_quartile = case_when(
+      age_at_exit < 53 ~ "< 53m",
+      age_at_exit >= 53 & age_at_exit < 67 ~ "53-67m",
+      age_at_exit >=67 & age_at_exit < 84 ~ "67-83m",
+      age_at_exit > 84 ~ "84m +"
+    ),
+    exit_age_quartile = as.factor(exit_age_quartile)
+  )
+
+boxplot(selling_price ~ exit_age_quartile, data = cow_sales,
+        main = "Sale Price by Age Group",
+        xlab = "Age Group (months)",
+        ylab = "Sale Price (€)")
+
+# ANOVA test for selling price differences by age group
+age_price_aov <- aov(selling_price ~ exit_age_quartile, data = cow_sales)
+summary(age_price_aov)
+
+# Assumptions Check
+# Get residuals
+resid <- residuals(age_price_aov)
+
+# QQ plot
+qqnorm(resid)
+qqline(resid)
+
+# Homogeneity of variance (homoscedasticity)
+leveneTest(selling_price ~ exit_age_quartile, data = cow_sales)
+
+# As long as assumptions hold, move on to a parametric posthoc test
+tukey_hsd(age_price_aov)
+
+
+# Estimate live weight at time of slaughter
+cow_sales <- cow_sales %>%
+  mutate(
+    est_dressing_percent = weight/MviWeight,
+    est_exit_weight = weight/0.5, # Based on data from Farm 1
+    est_weight_diff = est_exit_weight - MviWeight,
+  )
+
+lm_full_weight <- lm(est_exit_weight ~ MviWeight + fattened + age_at_exit + cohort, data=cow_sales)
 
