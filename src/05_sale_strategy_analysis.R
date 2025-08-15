@@ -4,6 +4,8 @@ library(mgcv)
 library(influence.ME)
 library(car)
 library(randomForest)
+library(broom)
+library(effsize)
 
 # Data:
 # -> cow_features
@@ -18,7 +20,7 @@ last_milking_weight <- last_milking_weight %>%
 cow_sales <- cow_features %>%
   select(AniLifeNumber, AniBirthday, age_at_exit, exit_date, exit_code, slaughter_date, weight, birth_year, cohort, endmilk_to_exit_days, selling_price, classification, category) %>%
   mutate(price_per_kg = selling_price / weight,
-         fattened = if_else(endmilk_to_exit_days >= 30, TRUE, FALSE, missing = NULL)) %>%
+         fattened = if_else(endmilk_to_exit_days >= 60, TRUE, FALSE, missing = NULL)) %>%
   filter(!is.na(price_per_kg))
 
 valid_sales_ids <- (cow_sales$AniLifeNumber)
@@ -57,6 +59,35 @@ table(cow_sales$fattened)
 boxplot(price_per_kg ~ fattened, data = cow_sales,
         main = "Price Summary for Fattened and Non-Fattened Cows",
         ylab = "Price (€/kg)")
+
+fattened_cows <- cow_sales %>%
+  filter(endmilk_to_exit_days >= 60)
+
+unfattened_cows <- cow_sales %>%
+  filter(endmilk_to_exit_days < 60)
+
+summary(fattened_cows$price_per_kg)
+summary(unfattened_cows$price_per_kg)
+
+summary(fattened_cows$weight)
+summary(unfattened_cows$weight)
+
+summary(fattened_cows$selling_price)
+summary(unfattened_cows$selling_price)
+
+boxplot(weight ~ fattened, data = cow_sales,
+        main = "Dressed Weight (kg) by Fattening Strategy")
+
+boxplot(selling_price ~ fattened, data = cow_sales,
+        main = "Total Sale Price (€) by Fattening Strategy")
+
+t_test(price_per_kg ~ fattened, data = cow_sales, var.equal = TRUE, conf.level = 0.95)
+
+t_test(weight ~ fattened, data = cow_sales, var.equal = TRUE, conf.level = 0.95)
+
+t_test(selling_price ~ fattened, data = cow_sales, var.equal = TRUE, conf.level = 0.95)
+
+fisher.test(table(cow_sales$fattened, cow_sales$classification), simulate.p.value = TRUE)
 
 ggplot(data = cow_sales, aes(x = exit_date, y = selling_price)) +
   geom_point(alpha = 0.4, color = "purple") +
@@ -108,27 +139,6 @@ ggplot(data = cow_sales, aes(x = endmilk_to_exit_days, y = selling_price, fill =
   ) +
   theme_classic()
 
-fattened_cows <- cow_sales %>%
-  filter(endmilk_to_exit_days >= 30)
-
-unfattened_cows <- cow_sales %>%
-  filter(endmilk_to_exit_days < 30)
-
-summary(fattened_cows$price_per_kg)
-summary(unfattened_cows$price_per_kg)
-
-summary(fattened_cows$weight)
-summary(unfattened_cows$weight)
-
-summary(fattened_cows$selling_price)
-summary(unfattened_cows$selling_price)
-
-boxplot(weight ~ fattened, data = cow_sales,
-        main = "Dressed Weight (kg) by Fattening Strategy")
-
-boxplot(selling_price ~ fattened, data = cow_sales,
-        main = "Total Sale Price (€) by Fattening Strategy")
-
 ggplot(data = cow_sales, aes(x=endmilk_to_exit_days, y = weight, color = cohort)) +
   geom_point(alpha = 0.4) +
   geom_smooth(method = "gam") +
@@ -157,15 +167,7 @@ ggplot(data = cow_sales, aes(x = exit_date, y = MviWeight, color = fattened)) +
   ) +
   theme_classic()
 
-t_test(price_per_kg ~ fattened, data = cow_sales, var.equal = TRUE, conf.level = 0.95)
-
-t_test(weight ~ fattened, data = cow_sales, var.equal = TRUE, conf.level = 0.95)
-
-t_test(selling_price ~ fattened, data = cow_sales, var.equal = TRUE, conf.level = 0.95)
-
-fisher.test(table(cow_sales$fattened, cow_sales$classification), simulate.p.value = TRUE)
-
-
+# Identify the y-intercept in the gam model in the graph above
 
 # Prepare data for GAM modeling
 cow_sales <- cow_sales %>%
@@ -177,8 +179,50 @@ cow_sales <- cow_sales %>%
     classification = as.factor(classification)
   )
 
+# Fit a gam model
+gam_fit <- gam(MviWeight ~ fattened + s(as.numeric(exit_date)), data = cow_sales, method = "REML")
+summary(gam_fit)
+summary(gam_fit)$p.table # fattened = FALSE is the baseline, so just look at the intercept to see the possible decision threshold
+
+# Test this value as a decision threshold for fattening
+cow_sales <- cow_sales %>%
+  mutate(suggested_fattening_decision = if_else(MviWeight < 755, TRUE, FALSE))
+
+# Determine if there's a correlation between suggested fattening and actual fattening
+fattening_decision <- table(cow_sales$suggested_fattening_decision, cow_sales$fattened)
+fattening_decision
+
+chisq.test(fattening_decision)
+
+# --- Compare sale prices for cows who had a last milking weight under 755kg and were and were not fattened ---
+
+# Filter to the analysis set
+ttest_df <- cow_sales %>%
+  filter(
+    suggested_fattening_decision == TRUE,
+    MviWeight < 755
+  ) %>%
+  select(selling_price, fattened, MviWeight) %>%
+  mutate(
+    fattened = factor(fattened, levels = c(FALSE, TRUE), labels = c("Not Fattened", "Fattened"))
+  ) %>%
+  tidyr::drop_na(selling_price, fattened)
+
+# sanity checks
+ttest_df %>% count(fattened)
+summary(ttest_df$selling_price)
+
+# Quick visual check
+ggplot(ttest_df, aes(x = fattened, y = selling_price)) +
+  geom_boxplot(outlier.alpha = 0.3) +
+  geom_jitter(width = 0.15, alpha = 0.5) +
+  labs(x = NULL, y = "Selling price", title = "Selling price by fattening status\n(weight < 755 kg & suggested = TRUE)") +
+  theme_classic()
+
+
+
 # Fit a GAM with a smoothing term for time
-gam_model <- gam(price_per_kg ~ fattened + s(as.numeric(exit_date)) + classification + age_at_exit + cohort, data = cow_sales)
+gam_model <- gam(selling_price ~ fattened + s(as.numeric(exit_date)) + classification + age_at_exit + cohort, data = cow_sales)
 summary(gam_model)
 
 # Check assumptions
@@ -187,7 +231,7 @@ plot(gam_model)
 qqnorm(residuals(gam_model))
 qqline(residuals(gam_model))
 
-vif(lm(price_per_kg ~ fattened + exit_date + age_at_exit + cohort, data = cow_sales))
+vif(lm(selling_price ~ fattened + exit_date + age_at_exit + cohort, data = cow_sales))
 
 # Check potential interactions
 gam_model_i <- gam(price_per_kg ~ fattened * cohort + classification + s(as.numeric(exit_date)) + age_at_exit, data = cow_sales)
@@ -215,12 +259,7 @@ gam.check(gam_model_i)
 
 gam_model2 <- gam(
   selling_price ~
-    s(as.numeric(exit_date)) +    # smooth trend over time
-    MviWeight +                   # linear effect of weight
-    fattened +                    # factor (TRUE/FALSE)
-    classification,               # factor
-  data = cow_sales,
-  method = "REML"
+    s(as.numeric(exit_date)) + MviWeight + fattened + classification, data = cow_sales, method = "REML"
 )
 
 summary(gam_model2)
@@ -251,6 +290,7 @@ cow_sales <- cow_sales %>%
     exit_age_quartile = as.factor(exit_age_quartile)
   )
 
+par(mfrow = c(1, 1))
 boxplot(selling_price ~ exit_age_quartile, data = cow_sales,
         main = "Sale Price by Age Group",
         xlab = "Age Group (months)",
