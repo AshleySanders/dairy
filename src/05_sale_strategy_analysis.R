@@ -1,14 +1,46 @@
-# 05_sale_strategy_analysis
+# ------------------------------------------------------------------------------
+# Script Name: 05_sale_strategy_analysis.R
+# Author: Ashley Sanders
+# Date Created: 2025-08-11
+# Date Modified: 2025-08-18
 
+# Description:
+#   Analyzes the effect of fattening strategy on dairy cow sale prices.
+#   Includes market trend adjustment (GAM), statistical testing (t-tests, ANOVA),
+#   decision tree modeling, and random forest variable importance analysis.
+#   Outputs are used to evaluate the effectiveness of a fattening threshold strategy
+#   and to identify key drivers of sale price outcomes.
+#
+# Input Data:
+#   - cow_features.csv
+#   - last_milking_weight.csv
+#   - cow_sales_no_classification.csv
+#
+# Outputs:
+#   - Summary statistics
+#   - GAM model summaries
+#   - Decision tree and random forest models
+#   - Visualizations (sale price over time, weight trends, etc.)
+#
+# Dependencies:
+#   - dplyr, tidyr, ggplot2, mgcv, rpart, caret, car, randomForest
+#
+# Notes:
+#   - Requires pre-cleaned cow_features and last_milking_weight data.
+#   - Assumes dressing % = 50% for live weight estimation.
+# ------------------------------------------------------------------------------
+
+# Load necessary libraries
 library(mgcv)
-library(influence.ME)
 library(car)
 library(randomForest)
-library(broom)
-library(effsize)
+library(rpart)
+library(rpart.plot)
+library(caret)
 
-# Data:
-# -> cow_features
+
+# Load and prepare data
+
 last_milking_weight <- read.csv(here("data", "last_milking_weight.csv")) # Generated in VSC
 
 last_milking_weight <- last_milking_weight %>%
@@ -34,7 +66,7 @@ cow_sales <- cow_sales %>%
               select(AniLifeNumber, MviWeight, LastMilkingDate),
             by = "AniLifeNumber")
 
-# read the data set in that contains the correct classifications that were previously missing
+# Read the data set in that contains the correct classifications that were previously missing
 cow_sales_classifications <- read_csv(here("data", "cow_sales_no_classification.csv"))
 
 cow_sales_updated <- cow_sales %>%
@@ -47,7 +79,8 @@ cow_sales_updated <- cow_sales %>%
 
 cow_sales <- cow_sales_updated
 
-
+#-------------------------------------------------------------------------------
+# --- Descriptive Analysis ---
 
 # View summary stats of last milking weight and dressed weight:
 summary(last_weight$MviWeight)
@@ -81,6 +114,10 @@ boxplot(weight ~ fattened, data = cow_sales,
 boxplot(selling_price ~ fattened, data = cow_sales,
         main = "Total Sale Price (€) by Fattening Strategy")
 
+#-------------------------------------------------------------------------------
+
+# --- Statistical Tests ---
+
 t_test(price_per_kg ~ fattened, data = cow_sales, var.equal = TRUE, conf.level = 0.95)
 
 t_test(weight ~ fattened, data = cow_sales, var.equal = TRUE, conf.level = 0.95)
@@ -88,6 +125,10 @@ t_test(weight ~ fattened, data = cow_sales, var.equal = TRUE, conf.level = 0.95)
 t_test(selling_price ~ fattened, data = cow_sales, var.equal = TRUE, conf.level = 0.95)
 
 fisher.test(table(cow_sales$fattened, cow_sales$classification), simulate.p.value = TRUE)
+
+#-------------------------------------------------------------------------------
+
+# --- Visual examination of potential correlations ---
 
 ggplot(data = cow_sales, aes(x = exit_date, y = selling_price)) +
   geom_point(alpha = 0.4, color = "purple") +
@@ -157,6 +198,11 @@ ggplot(data = cow_sales, aes(x = exit_date, y = weight, color = fattened)) +
   ) +
   theme_classic()
 
+#-------------------------------------------------------------------------------
+
+# --- Identification of a possible decision threshold for fattening ---
+
+# Visual inspection
 ggplot(data = cow_sales, aes(x = exit_date, y = MviWeight, color = fattened)) +
   geom_point(alpha = 0.6) +
   geom_smooth(method = "gam") +
@@ -168,7 +214,6 @@ ggplot(data = cow_sales, aes(x = exit_date, y = MviWeight, color = fattened)) +
   theme_classic()
 
 # Identify the y-intercept in the gam model in the graph above
-
 # Prepare data for GAM modeling
 cow_sales <- cow_sales %>%
   mutate(
@@ -194,44 +239,109 @@ fattening_decision
 
 chisq.test(fattening_decision)
 
-# --- Compare sale prices for cows who had a last milking weight under 755kg and were and were not fattened ---
+#-------------------------------------------------------------------------------
 
-# Filter to the analysis set
+# --- Compare sale prices for cows < 755kg based on fattening strategy ---
+
+# Adjust selling_price for date using a regression residual approach
+trend_model <- gam(selling_price ~ s(as.numeric(exit_date)), data = cow_sales)
+
+# Get residuals = price adjusted for market trends
+cow_sales <- cow_sales %>%
+  mutate(price_adj = resid(trend_model))
+
+# Run t-test on adjusted prices
 ttest_df <- cow_sales %>%
   filter(
     suggested_fattening_decision == TRUE,
     MviWeight < 755
   ) %>%
-  select(selling_price, fattened, MviWeight) %>%
+  select(selling_price, fattened, MviWeight, price_adj) %>%
   mutate(
     fattened = factor(fattened, levels = c(FALSE, TRUE), labels = c("Not Fattened", "Fattened"))
   ) %>%
-  tidyr::drop_na(selling_price, fattened)
+  tidyr::drop_na(selling_price, fattened, price_adj)
 
-# sanity checks
-ttest_df %>% count(fattened)
-summary(ttest_df$selling_price)
+t.test(price_adj ~ fattened, data = ttest_df)
 
-# Quick visual check
-ggplot(ttest_df, aes(x = fattened, y = selling_price)) +
-  geom_boxplot(outlier.alpha = 0.3) +
-  geom_jitter(width = 0.15, alpha = 0.5) +
-  labs(x = NULL, y = "Selling price", title = "Selling price by fattening status\n(weight < 755 kg & suggested = TRUE)") +
-  theme_classic()
+# Compare the t-test results to those of a GAM model
+
+price_model <- gam(
+  selling_price ~ fattened + s(as.numeric(exit_date)),
+  data = cow_sales %>%
+    filter(suggested_fattening_decision == TRUE, MviWeight < 755)
+)
+
+summary(price_model)
+
+#-------------------------------------------------------------------------------
+
+# --- Test the threshold with a decision tree ---
+# Uses trend_model and the new variable price_adj in cow_sales.
+
+# Define "beneficial" if the adjusted price is higher than the median of the non-fattened cow group
+
+median_unfattened <- cow_sales %>%
+  filter(fattened == FALSE) %>%
+  summarise(median_price = median(price_adj, na.rm = TRUE)) %>%
+  pull(median_price)
+
+cow_sales <- cow_sales %>%
+  mutate(beneficial = case_when(
+    fattened == TRUE & price_adj > median_unfattened ~ "beneficial",
+    fattened == TRUE & price_adj <= median_unfattened ~ "not_beneficial",
+    TRUE ~ NA_character_ # only assess cows that were fattened
+  )) %>%
+  filter(!is.na(beneficial)) # keep only fattened cows for this decision rule
+
+# Select relevant features for the model
+model_data <- cow_sales %>%
+  select(beneficial, MviWeight, age_at_exit, classification, cohort, fattened, endmilk_to_exit_days)
+
+# Ensure that the factors are correctly formatted
+model_data <- model_data %>%
+  mutate(across(c(beneficial, classification, cohort, fattened), as.factor))
+
+# Fit the tree
+decision_tree <- rpart(
+  formula = beneficial ~ MviWeight + age_at_exit + classification + cohort + endmilk_to_exit_days,
+  data = model_data,
+  method = "class", # target is categorical
+  cp = 0.01 # complexity parameter to avoid overfitting
+)
+
+# Visualize the tree
+rpart.plot(decision_tree, type = 2, extra = 106, fallen.leaves = TRUE,
+           main = "Decision Tree: Is Fattening Financially Beneficial?")
 
 
+# Check splits
+decision_tree$splits # see split values for continuous variables
 
-# Fit a GAM with a smoothing term for time
-gam_model <- gam(selling_price ~ fattened + s(as.numeric(exit_date)) + classification + age_at_exit + cohort, data = cow_sales)
-summary(gam_model)
+# Confusion matrix to examine model performance
 
-# Check assumptions
-par(mfrow = c(1, 2))
-plot(gam_model)
-qqnorm(residuals(gam_model))
-qqline(residuals(gam_model))
+set.seed(42)
 
-vif(lm(selling_price ~ fattened + exit_date + age_at_exit + cohort, data = cow_sales))
+# Create a train-test split
+train_index <- createDataPartition(model_data$beneficial, p = 0.8, list = FALSE)
+train_data <- model_data[train_index, ]
+test_data <- model_data[-train_index, ]
+
+decision_tree <- rpart(formula = beneficial ~ MviWeight + age_at_exit + classification + cohort + endmilk_to_exit_days,
+                       data = train_data,
+                       method = "class",
+                       cp = 0.01)
+
+# predict class labels
+predicted_class <- predict(decision_tree, newdata = test_data, type = "class")
+
+# confusion matrix
+conf_matrix <- confusionMatrix(predicted_class, test_data$beneficial)
+print(conf_matrix)
+
+table(test_data$beneficial)
+
+#-------------------------------------------------------------------------------
 
 # Check potential interactions
 gam_model_i <- gam(price_per_kg ~ fattened * cohort + classification + s(as.numeric(exit_date)) + age_at_exit, data = cow_sales)
@@ -272,13 +382,18 @@ gam.check(gam_model2)
 plot(gam_model2$fitted.values, residuals(gam_model2))
 abline(h=0, col='red')
 
+#-------------------------------------------------------------------------------
+
 # --- Examine all variables importance in predicting selling price ---
 rf_model <- randomForest(selling_price ~ MviWeight + exit_date + age_at_exit + fattened + endmilk_to_exit_days + classification + cohort, data = cow_sales, importance = TRUE)
 
 importance(rf_model)
 varImpPlot(rf_model)
 
-# Explore effects of age on selling price
+#-------------------------------------------------------------------------------
+
+# --- Explore effects of age on selling price ---
+
 cow_sales <- cow_sales %>%
   mutate(
     exit_age_quartile = case_when(
@@ -314,6 +429,9 @@ leveneTest(selling_price ~ exit_age_quartile, data = cow_sales)
 # As long as assumptions hold, move on to a parametric posthoc test
 tukey_hsd(age_price_aov)
 
+#-------------------------------------------------------------------------------
+
+# --- Bonus Calculations ---
 
 # Estimate live weight at time of slaughter
 cow_sales <- cow_sales %>%
