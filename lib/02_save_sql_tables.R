@@ -24,18 +24,11 @@
 # Last updated:   2025-08-20
 # ------------------------------------------------------------------------------
 
-# Clean animal ID formatting
-clean_ani <- function(x) str_replace_all(str_trim(as.character(x)), " ", "")
-
 # Load farm config (define `farm_id`, `customer_id`, etc.)
 source(here::here("config", "farm1_config.R"))
 
-# Wrapper
-assign_and_cache <- function(obj_name, value, prefix = farm_prefix) {
-  full_name <- paste0(prefix, "_", obj_name)
-  assign(full_name, value, envir = .GlobalEnv)
-  cache(full_name)
-}
+# Load functions
+source(here::here("lib", "helpers.R"))
 
 # Load milk production data from Lely
 assign_and_cache("milk_all", dbGetQuery(lely, "

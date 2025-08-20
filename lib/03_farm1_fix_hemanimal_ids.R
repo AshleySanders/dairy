@@ -17,10 +17,10 @@
 
 
 # Manually clean misidentified cow's national numbers from Lely data for Farm1
-HemAnimal <- HemAnimal %>%
+fm1_HemAnimal <- fm1_HemAnimal %>%
   mutate(AniId = as.character(AniId))
 
-HemAnimal <- HemAnimal %>%
+fm1_HemAnimal <- fm1_HemAnimal %>%
   mutate(
     AniLifeNumber = case_when(
       AniId == "253" ~ "FR4404288298",
@@ -51,21 +51,21 @@ HemAnimal <- HemAnimal %>%
 
 
 # Quick check before caching.
-HemAnimal %>%
+fm1_HemAnimal %>%
   filter(AniId %in% c("253", "257", "267", "277", "282", "289", "286", "987", "1040", "1064", "1071") |
            AniLifeNumber %in% c("FR4404288300", "FR4404288320", "FR4404288307", "FR4404288319", "FR4404288415", "FR4404288681")) %>%
   select(AniId, AniLifeNumber, AniBirthday, AniMotherLifeNumber)
 
 
 # Manual corrections for dairy_meta_farm1
-dairy_meta_farm1 <- dairy_meta_farm1 %>%
-  mutate(
-    exit_date = case_when(
-      AniLifeNumber == "FR4404288320" ~ as.Date("2023-04-11"),
-      AniLifeNumber =="FR4404288415" ~ as.Date("2023-07-31"),
-      TRUE ~ exit_date
-      ),
-    exit_code = case_when(
-      AniLifeNumber == "FR4404288320" ~ "B",
-      AniLifeNumber == "FR4404288415" ~ "B",
-      TRUE ~ exit_code))
+# dairy_meta_farm1 <- dairy_meta_farm1 %>%
+#   mutate(
+#     exit_date = case_when(
+#       AniLifeNumber == "FR4404288320" ~ as.Date("2023-04-11"),
+#       AniLifeNumber =="FR4404288415" ~ as.Date("2023-07-31"),
+#       TRUE ~ exit_date
+#       ),
+#     exit_code = case_when(
+#       AniLifeNumber == "FR4404288320" ~ "B",
+#       AniLifeNumber == "FR4404288415" ~ "B",
+#       TRUE ~ exit_code))
