@@ -1,4 +1,9 @@
 # lib/01_libraries.R
+library(DBI)
+library(odbc)
+library(DBI)
+library(RPostgres)
+library(httr)
 library(dplyr)
 library(lubridate)
 library(stringr)

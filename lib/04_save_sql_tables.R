@@ -1,20 +1,8 @@
 # ------------------------------------------------------------------------------
-# Script Name:    load_and_cache_sql_data.R
-# Project:        Cockpit Agriculture – Herd Management Strategy
-# Purpose:        Load and cache raw data from Lely and Supabase databases to
-#                 avoid redundant SQL queries and support faster, reproducible
-#                 development workflows within ProjectTemplate.
+# Script Name:    04_save_sql_tables.R
+# Project:        Dairy Herd Management Strategy
+# Purpose:        Load and cache raw data from Lely and Supabase databases
 #
-# Description:    This script connects to the Lely milking system and Supabase
-#                 databases to retrieve core tables related to:
-#                   - Milk production (daily and monthly)
-#                   - Animal metadata
-#                   - Lactation, insemination, and pregnancy records
-#                   - Farm accounting (general ledger)
-#                   - Mil’Klic summaries (if available)
-#                 Retrieved data is immediately saved to `cache/` using the
-#                 `cache()` function. These cached datasets will be loaded
-#                 automatically by ProjectTemplate if not re-generated.
 #
 # Usage Notes:
 #   - This script is designed to be run manually when updates to raw SQL data
@@ -33,160 +21,96 @@
 #
 # Author:         Ashley Sanders
 # Created:        2025-06-25
-# Last updated:   2025-07-16
+# Last updated:   2025-08-20
 # ------------------------------------------------------------------------------
 
-# Load libraries
-library(dplyr)
-library(tidyverse)
-library(lubridate)
-library(stringr)
-
-# Function to clean AniLifeNumber so that it matches the format of national_number/animal from Supabase tables
+# Clean animal ID formatting
 clean_ani <- function(x) str_replace_all(str_trim(as.character(x)), " ", "")
 
+# Load farm config (define `farm_id`, `customer_id`, etc.)
+source(here::here("config", "farm1_config.R"))
+
+# Wrapper
+assign_and_cache <- function(obj_name, value, prefix = farm_prefix) {
+  full_name <- paste0(prefix, "_", obj_name)
+  assign(full_name, value, envir = .GlobalEnv)
+  cache(full_name)
+}
 
 # Load milk production data from Lely
-milk_all <- dbGetQuery(lely, "
-  SELECT
-    MdpId,
-    MdpAniId,
-    MdpProductionDate,
-    MdpDayProduction,
-    MdpDayProductionMAvg,
-    MdpMilkings,
-    MdpFatPercentage,
-    MdpProteinPercentage
-  FROM PrmMilkDayProduction
-  ORDER BY MdpAniId, MdpProductionDate
-")
-
-cache("milk_all")
+assign_and_cache("milk_all", dbGetQuery(lely, "
+SELECT MdpId, MdpAniId, MdpProductionDate, MdpDayProduction,
+  MdpDayProductionMAvg, MdpMilkings, MdpFatPercentage, MdpProteinPercentage
+FROM PrmMilkDayProduction
+ORDER BY MdpAniId, MdpProductionDate"))
 
 
 # Load animal metadata
-HemAnimal <- dbGetQuery(lely, "
-  SELECT
-    AniId,
-    AniLifeNumber,
-    AniActive,
-    AniGenId,
-    AniBirthday,
-    AniMotherLifeNumber
-  FROM HemAnimal
-  ORDER BY AniId")
+assign_and_cache("HemAnimal", dbGetQuery(lely, "
+SELECT AniId, AniLifeNumber, AniActive, AniGenId, AniBirthday,
+  AniMotherLifeNumber
+FROM HemAnimal
+ORDER BY AniId"))
 
-# Run any necessary manual corrections from /lib
-
-cache("HemAnimal")
+# ! Run any necessary manual corrections from /lib
 
 # Load lactation records
-lactation <- dbGetQuery(lely, "
-  SELECT
-    LacId,
-    LacAniId,
-    LacNumber,
-    LacDryOffDate,
-    LacCalvingDate,
-    LacColostrumDate,
-    LacRemarks
-  FROM RemLactation
-")
-
-cache("lactation")
+assign_and_cache("lactation", dbGetQuery(lely, "
+SELECT LacId, LacAniId, LacNumber, LacDryOffDate, LacCalvingDate,
+  LacColostrumDate, LacRemarks
+FROM RemLactation"))
 
 # Join milk data to cow identity info with the corrected HemAnimal data
-milk_cows <- milk_all %>%
-  left_join(
-    HemAnimal %>% select(AniId, AniLifeNumber, AniActive, AniGenId, AniBirthday, AniMotherLifeNumber),
-    by = c("MdpAniId" = "AniId")
-  )
-
-cache("milk_cows")
-
+assign_and_cache("milk_cows",
+                 get(paste0(farm_prefix, "_milk_all")) %>%
+                   left_join(
+                     get(paste0(farm_prefix, "_HemAnimal")) %>%
+                       select(AniId, AniLifeNumber, AniActive, AniGenId, AniBirthday, AniMotherLifeNumber),
+                     by = c("MdpAniId" = "AniId")
+                   )
+)
 
 # Join lactation data from Lely with animal metadata
-lactation_animal <- dbGetQuery(lely, "
-  SELECT
-    RemLactation.LacId,
-    RemLactation.LacAniId,
-    RemLactation.LacNumber,
-    RemLactation.LacDryOffDate,
-    RemLactation.LacCalvingDate,
-    RemLactation.LacColostrumDate,
-    RemLactation.LacRemarks,
-    HemAnimal.AniLifeNumber,
-    HemAnimal.AniBirthday,
-    HemAnimal.AniKeep,
-    HemAnimal.AniGenId,
-    HemAnimal.AniActive,
-    HemAnimal.AniMotherLifeNumber
-  FROM RemLactation
-  INNER JOIN HemAnimal
-    ON HemAnimal.AniId = RemLactation.LacAniId
-  ORDER BY HemAnimal.AniId
-")
+assign_and_cache("lactation_animal", dbGetQuery(lely, "
+SELECT r.LacId, r.LacAniId, r.LacNumber, r.LacDryOffDate, r.LacCalvingDate,
+  r.LacColostrumDate, r.LacRemarks,
+  h.AniLifeNumber, h.AniBirthday, h.AniKeep, h.AniGenId, h.AniActive,
+  h.AniMotherLifeNumber
+FROM RemLactation r
+INNER JOIN HemAnimal h ON h.AniId = r.LacAniId
+ORDER BY h.AniId"))
 
-cache("lactation_animal")
 
 # Get insemination data
-insemination <- dbGetQuery(lely, "
-  SELECT
-    InsId,
-    InsSirId,
-    InsNumber,
-    InsRemarks,
-    InsDate,
-    InsLacId,
-    HemAnimal.AniId,
-    HemAnimal.AniLifeNumber,
-    HemAnimal.AniBirthday,
-    HemAnimal.AniGenId,
-    HemAnimal.AniMotherLifeNumber
-  FROM RemInsemination
-  INNER JOIN RemLactation
-    ON RemLactation.LacId = RemInsemination.InsLacId
-  INNER JOIN HemAnimal
-    ON HemAnimal.AniId = RemLactation.LacAniId
-  ORDER BY HemAnimal.AniId
-")
-
-# Convert date columns to Date type
-insemination <- insemination %>%
-  mutate(
-    AniLifeNumber = clean_ani(AniLifeNumber),
-    AniBirthday = as.Date(AniBirthday, format = "%Y-%m-%d"),
-    InsDate = as.Date(InsDate, format = "%Y-%m-%d")
-  )
-
-cache("insemination")
+assign_and_cache("insemination",
+                 dbGetQuery(lely, "
+SELECT i.InsId, i.InsSirId, i.InsNumber, i.InsRemarks, i.InsDate, i.InsLacId,
+h.AniId, h.AniLifeNumber, h.AniBirthday, h.AniGenId, h.AniMotherLifeNumber
+FROM RemInsemination i
+INNER JOIN RemLactation r ON r.LacId = i.InsLacId
+INNER JOIN HemAnimal h ON h.AniId = r.LacAniId
+ORDER BY h.AniId") %>%
+                   mutate(
+                     AniLifeNumber = clean_ani(AniLifeNumber),
+                     AniBirthday = as.Date(AniBirthday),
+                     InsDate = as.Date(InsDate)
+                   )
+)
 
 # Get pregnancy data
-pregnancy <- dbGetQuery(lely, "
-    SELECT PreLacId, PreDate, PreInsId, PreRemark
-    FROM RemPregnancy
-")
-
+assign_and_cache("pregnancy", dbGetQuery(lely, "SELECT PreLacId, PreDate, PreInsId, PreRemark FROM RemPregnancy"))
 cache("pregnancy")
 
 # Health Data from Lely
-animal_health <- dbGetQuery(lely, "
-  SELECT
-  LimDisease.DisId,
-  LimDisease.DisDcaId,
-  LimDisease.DisName,
-  LimDisease.DisCurePeriod,
-  LimDisease.DisDescription,
-  HemDiagnoses.DiaAniId,
-  HemDiagnoses.DiaDate,
-  HemDiagnoses.DiaRemarks,
-  HemDiagnoses.DiaWithMilk,
-  HemDiagnoses.DiaWithMeat,
-  HemAnimal.AniId,
-  HemAnimal.AniLifeNumber
-  FROM LimDisease
-  LEFT JOIN HemDiagnoses ON LimDisease.DisId = HemDiagnoses.DiaDisId
-  LEFT JOIN HemAnimal ON HemDiagnoses.DiaAniId = HemAnimal.AniId")
+assign_and_cache("animal_health", dbGetQuery(lely, "
+SELECT
+  d.DisId, d.DisDcaId, d.DisName, d.DisCurePeriod, d.DisDescription,
+  diag.DiaAniId, diag.DiaDate, diag.DiaRemarks, diag.DiaWithMilk,
+  diag.DiaWithMeat,
+  h.AniId, h.AniLifeNumber
+FROM LimDisease d
+LEFT JOIN HemDiagnoses diag ON d.DisId = diag.DiaDisId
+LEFT JOIN HemAnimal h ON diag.DiaAniId = h.AniId"))
 
 # Save animals_history table from Supabase for later use
 
@@ -361,16 +285,12 @@ gl_entries_farm1 <- dbGetQuery(prod, "
 
 cache("gl_entries_farm1")
 
-head(gl_entries_farm1$label)
-# Check the unique labels to understand what types of entries we have
-unique(gl_entries_farm1$label)
+assign_and_cache("gl_entries", dbGetQuery(prod, paste0(
+  "SELECT * FROM gl_entries WHERE customer_id = '", customer_id, "' ORDER BY date DESC")))
 
 # Exploring sales data for farm 1
 
-farm1_gl_credits <- gl_entries_farm1 %>%
-  filter(!is.na(credit), credit > 0)
-
-cache("farm1_gl_credits")
-
-
-
+assign_and_cache("gl_credits",
+                 get(paste0(farm_prefix, "_gl_entries")) %>%
+                   filter(!is.na(credit), credit > 0)
+)
