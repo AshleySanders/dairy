@@ -2,7 +2,7 @@
 # Script Name: 03-lactation_metrics.R
 # Author: Ashley Sanders
 # Date Created: 2025-07-10
-# Last Updated: 2025-07-23
+# Last Updated: 2025-08-21
 # Project: Herd Management Strategy Analysis – Dairy Cow Lactation Cycle Metrics
 #
 # Description:

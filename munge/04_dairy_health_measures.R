@@ -22,31 +22,30 @@
 # - dplyr, stringr, lubridate (via tidyverse)
 # - cache() function from ProjectTemplate or similar
 # -----------------------------------------------------------------------------
+# Load config and helpers
+source(here::here("config", "farm1_config.R"))
+source(here::here("lib", "helpers.R"))
 
-# Load libraries (assumes tidyverse and cache already available)
-library(dplyr)
-library(stringr)
+# Filter out routine dry-off and vaccination events
+assign(paste0(farm_prefix, "_dairy_health_problems"),
+       get(paste0(farm_prefix, "_dairy_health")) %>%
+         filter(
+           DisName != "Drying-off",
+           !str_detect(tolower(DisName), "vaccin")
+         )
+)
 
-# Filter out routine dry-off and preventive vaccination records
-# to retain only true health problems
 
-dairy_health_problems <- dairy_health %>%
-  filter(
-    DisName != "Drying-off",                        # remove planned dry-off events
-    !str_detect(tolower(DisName), "vaccin")         # remove any vaccination entries
-  )
+cache(paste0(farm_prefix, "_dairy_health_problems"))
 
-# Cache the filtered health problems dataset for reuse
-cache("dairy_health_problems")
-
-# Standardize identifier and parse date column
-# DiaDate arrives as character; convert to Date
-
-dairy_health_problems <- dairy_health_problems %>%
-  mutate(
-    AniLifeNumber    = clean_ani(AniLifeNumber),      # remove spaces/padding
-    DiaDate          = as.Date(DiaDate)               # convert to Date type
-  )
+# Standardize IDs and convert date
+assign(paste0(farm_prefix, "_dairy_health_problems"),
+       get(paste0(farm_prefix, "_dairy_health_problems")) %>%
+         mutate(
+           AniLifeNumber = clean_ani(AniLifeNumber),
+           DiaDate = as.Date(DiaDate)
+         )
+)
 
 # Aggregate per-cow health metrics
 # - n_health_problems: total count of events
@@ -55,16 +54,19 @@ dairy_health_problems <- dairy_health_problems %>%
 # - last_diagnosis: name of health issue at that date
 # These will be joined later into cow_features for modeling
 
-cow_health_summary <- dairy_health_problems %>%
-  group_by(AniLifeNumber) %>%
-  summarise(
-    n_health_problems    = n(),                                 # total health events
-    recovery_duration    = sum(DisCurePeriod, na.rm = TRUE),    # total days under treatment
-    date_last_diagnosis  = max(DiaDate, na.rm = TRUE),          # latest event date
-    last_diagnosis       = DisName[which.max(DiaDate)],         # issue corresponding to latest date
-    .groups = "drop"
-  )
+# Aggregate health metrics per cow
+assign(paste0(farm_prefix, "_cow_health_summary"),
+       get(paste0(farm_prefix, "_dairy_health_problems")) %>%
+         group_by(AniLifeNumber) %>%
+         summarise(
+           n_health_problems = n(),
+           recovery_duration = sum(DisCurePeriod, na.rm = TRUE),
+           date_last_diagnosis = max(DiaDate, na.rm = TRUE),
+           last_diagnosis = DisName[which.max(DiaDate)],
+           .groups = "drop"
+         )
+)
 
-# Cache final summary table for joining
-cache("cow_health_summary")
-write.csv(dairy_health_problems, here("data", "dairy_health_problems.csv"))
+
+cache(paste0(farm_prefix, "_cow_health_summary"))
+write.csv(get(paste0(farm_prefix, "_dairy_health_problems")), here("data", paste0(farm_prefix, "_dairy_health_problems.csv")))

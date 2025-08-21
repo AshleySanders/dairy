@@ -8,8 +8,7 @@
 # dairy_meta_farm1
 # animals_slaughter_farm1
 
-# Function to clean AniLifeNumber so that it matches the format of national_number/animal from Supabase tables
-clean_ani <- function(x) str_replace_all(str_trim(as.character(x)), " ", "")
+
 
 valid_cow_ids <- unique(lactation_metrics$AniLifeNumber)
 
