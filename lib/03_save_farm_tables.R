@@ -25,7 +25,7 @@
 # ------------------------------------------------------------------------------
 
 # Load farm config (define `farm_id`, `customer_id`, etc.)
-source(here::here("config", "farm2_config.R"))
+source(here::here("config", "farm5_config.R"))
 
 # Load functions
 source(here::here("lib", "helpers.R"))

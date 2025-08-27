@@ -34,7 +34,7 @@ source(here::here("config", "farm1_config.R"))
 source(here::here("lib", "helpers.R"))
 
 # Load lactation metrics
-assign(paste0(farm_prefix, "_lactation_summary_all"), read.csv(here("data", "fm1_lactation_cycles_milk_metrics.csv")))
+assign(paste0(farm_prefix, "_lactation_summary_all"), read.csv(here("data", "fm5_lactation_cycles_milk_metrics.csv")))
 
 
 # Clean and prepare lactation summary
@@ -44,26 +44,9 @@ assign(paste0(farm_prefix, "_lactation_summary"),
                 AniId = clean_ani(AniId),
                 LacCalvingDate = as.Date(LacCalvingDate),
                 AniId = as.character(AniId)) %>%
-         mutate(
-           AniLifeNumber = case_when(
-             AniId == "253" ~ "FR4404288298",
-             AniId == "257" ~ "FR4404288299",
-             AniId == "267" ~ "FR4404288307",
-             AniId == "277" ~ "FR4404288308",
-             AniId == "282" ~ "FR4404288319",
-             AniId == "289" ~ "FR4404288318",
-             AniId == "286" ~ "FR4404288320",
-             AniId == "987" ~ "FR4404288598",
-             AniId == "1040" ~ "FR4404288645",
-             AniId == "1064" ~ "FR4404288667",
-             AniId == "1071" ~ "FR4404288645",
-             TRUE ~ AniLifeNumber
-           ),
-           AniId = as.integer(AniId)
-         ) %>%
          left_join(
-           get(paste0(farm_prefix, "_dairy_meta")) %>% select(-AniId, AniActive),
-           by = "AniLifeNumber"
+           get(paste0(farm_prefix, "_dairy_meta")) %>% select(-c(AniId, AniActive)),
+           by = c("AniLifeNumber" = "national_number"), relationship = "many-to-many"
          ) %>%
          mutate(
            LacColostrumDate = as.Date(LacColostrumDate),
@@ -74,19 +57,20 @@ assign(paste0(farm_prefix, "_lactation_summary"),
            mean_protein_percent = as.numeric(mean_protein_percent),
            dry_off_date = as.Date(dry_off_date),
            dry_off_interval = as.integer(dry_off_interval)
-         )
+         ) %>%
+         select(-c(category, customer_id, date, month, year))
 )
 
 
 # Ensure correct data types
-glimpse(lactation_summary)
+glimpse(get(paste0(farm_prefix, "_lactation_summary")))
 
 
 # Checks
-dim(lactation_summary_all)
-dim(lactation_summary)
-colnames(lactation_summary)
-sum(is.na(lactation_summary$LacId))
+dim(get(paste0(farm_prefix, "_lactation_summary_all")))
+dim(get(paste0(farm_prefix, "_lactation_summary")))
+colnames(get(paste0(farm_prefix, "_lactation_summary")))
+sum(is.na(get(paste0(farm_prefix, "_lactation_summary"))$LacId))
 
 # Deduplicate on LacId to avoid inflation
 assign(paste0(farm_prefix, "_lactation_summary"),
@@ -134,8 +118,9 @@ assign(paste0(farm_prefix, "_insem_lactation"),
 )
 
 # Checks
-# dim(insem_lactation)
-# colnames(insem_lactation)
+dim(get(paste0(farm_prefix, "_insem_lactation")))
+colnames(get(paste0(farm_prefix, "_insem_lactation")))
+
 # Join pregnancy to insemination+lactation
 assign(paste0(farm_prefix, "_insem_lac_preg"),
        get(paste0(farm_prefix, "_insem_lactation")) %>%
@@ -143,8 +128,8 @@ assign(paste0(farm_prefix, "_insem_lac_preg"),
 )
 
 # Checks
-# dim(insem_lac_preg)
-# colnames(insem_lac_preg)
+dim(get(paste0(farm_prefix, "_insem_lac_preg")))
+colnames(get(paste0(farm_prefix, "_insem_lac_preg")))
 # View(insem_lac_preg %>% filter(AniLifeNumber == "FR4404288134")) # visual exam
 
 # De-duplicate when there are multiple pregnancy confirmation dates
@@ -159,8 +144,7 @@ assign(paste0(farm_prefix, "_insem_lac_preg"),
 )
 
 # Check
-# nrow(insem_lactation) == nrow(insem_lac_preg_dedup)
-
+nrow(get(paste0(farm_prefix, "_insem_lac_preg"))) == nrow(get(paste0(farm_prefix, "_insem_lac_preg")))
 
 # Flag successful inseminations and pregnancies
 assign(paste0(farm_prefix, "_insem_lac_preg"),

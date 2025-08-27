@@ -77,5 +77,3 @@ gl_entries <- dbGetQuery(prod, "
 		document_id,
 		invoice_id
 	FROM gl_entries")
-
-# Grand Livre entries for the first farm in the analysis

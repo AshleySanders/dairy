@@ -27,24 +27,26 @@
 #
 # Author:         Ashley Sanders
 # Created:        2025-07-18
-# Last updated:   2025-07-21
+# Last updated:   2025-08-20
 # ------------------------------------------------------------------------------
 
 # Load config and helpers
-source(here::here("config", "farm1_config.R"))
+source(here::here("config", "farm5_config.R"))
 source(here::here("lib", "helpers.R"))
 
 
 # Clean and filter animals_history
 assign(paste0(farm_prefix, "_animals_history"),
        animals_history %>%
-         filter(customer_id == !!customer_id) %>%
-         filter(date < as.Date("2024-09-19")) %>%
+         filter(customer_id == farm5_customer_id) %>%
+         filter(date < as.Date("2025-03-12")) %>%
          distinct() %>%
-         mutate(national_number = clean_ani(animal),
-                date = as.Date(date),
-                entry_date = as.Date(entry_date),
-                exit_date = as.Date(exit_date)) %>%
+         mutate(
+           national_number = clean_ani(animal),
+           date = as.Date(date),
+           entry_date = as.Date(entry_date),
+           exit_date = as.Date(exit_date)
+         ) %>%
          select(-animal)
 )
 
@@ -52,7 +54,7 @@ assign(paste0(farm_prefix, "_animals_history"),
 # Import and clean slaughter data
 assign(paste0(farm_prefix, "_animals_slaughter"),
        animals_slaughter %>%
-         filter(customer_id == !!customer_id) %>%
+         filter(customer_id == farm5_customer_id) %>%
          distinct() %>%
          mutate(AniLifeNumber = clean_ani(national_number),
                 slaughter_date = as.Date(date),
@@ -76,9 +78,10 @@ assign(paste0(farm_prefix, "_dairy_history"),
          slice(1) %>%
          ungroup()
 )
+
 # ! Run any necessary manual correction from /lib
 
-cache(paste0(farm_prefix, "_dairy_history"))
+cache(paste0(farm_prefix, "_animals_history"))
 
 # Check the quality of animal national numbers and metadata in Lely
 assign(paste0(farm_prefix, "_HemAnimal"),
@@ -94,23 +97,14 @@ assign(paste0(farm_prefix, "_HemAnimal"),
 herd_ids <- unique(get(paste0(farm_prefix, "_HemAnimal"))$AniLifeNumber)
 
 # Join HemAnimal with dairy history
-assign(paste0(farm_prefix, "_dairy_meta"),
-       get(paste0(farm_prefix, "_HemAnimal")) %>%
-         left_join(get(paste0(farm_prefix, "_dairy_history")) %>% filter(national_number %in% herd_ids),
-                   by = c("AniLifeNumber" = "national_number")) %>%
-         mutate(
-           entry_code = if_else(is.na(entry_code) & AniMotherLifeNumber %in% herd_ids, "N", entry_code),
-           entry_date = if_else(is.na(entry_date) & entry_code == "N", AniBirthday, entry_date)
-         ) %>%
-         rowwise() %>%
-         mutate(completeness = sum(!is.na(exit_date), na.rm = TRUE)) %>%
-         ungroup() %>%
-         group_by(AniLifeNumber) %>%
-         slice_max(order_by = completeness, n = 1, with_ties = FALSE) %>%
-         ungroup() %>%
-         select(-completeness) %>%
-         filter(AniLifeNumber %in% unique(get(paste0(farm_prefix, "_lactation"))$LacAniId))
-)
+fm5_dairy_meta <- fm5_dairy_history %>%
+  left_join(fm5_HemAnimal, by = c("national_number" = "AniLifeNumber")) %>%
+  mutate(
+    entry_code = if_else(is.na(entry_code) & AniMotherLifeNumber %in% herd_ids, "N", entry_code),
+    entry_date = if_else(!is.na(entry_date), entry_date,
+                         if_else(entry_code == "N", AniBirthday, as.Date(NA)))
+  )
+
 
 
 # Quick checks
