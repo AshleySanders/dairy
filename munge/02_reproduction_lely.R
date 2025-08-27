@@ -30,7 +30,7 @@
 
 
 # Load config and helpers
-source(here::here("config", "farm1_config.R"))
+source(here::here("config", "farm5_config.R"))
 source(here::here("lib", "helpers.R"))
 
 # Load lactation metrics
@@ -84,10 +84,7 @@ assign(paste0(farm_prefix, "_lactation_summary"),
 cache(paste0(farm_prefix, "_lactation_summary"))
 
 # verify that the number of rows matches the original lactation_summary_all table
-# nrow(lactation_summary_all) == nrow(lactation_summary_dedup)
-
-# After verification save the de-duped table as the original table name
-# lactation_summary <- lactation_summary_dedup
+nrow(get(paste0(farm_prefix, "_lactation_summary_all"))) == nrow(get(paste0(farm_prefix, "_lactation_summary")))
 
 # Join lactation and insemination data to have one row per insemination attempt for each lactation cycle for each cow.
 
@@ -102,49 +99,87 @@ assign(paste0(farm_prefix, "_insemination"), get(paste0(farm_prefix, "_inseminat
 
 # Join insemination with lactation
 assign(paste0(farm_prefix, "_insem_lactation"),
-       get(paste0(farm_prefix, "_insemination")) %>%
+       get(paste0(farm_prefix, "_lactation_summary")) %>%
          left_join(
-           get(paste0(farm_prefix, "_lactation_summary")) %>%
-             select(-c(AniBirthday, AniGenId, AniMotherLifeNumber, AniId,
-                       milk_production_start_date,
-                       milk_production_end_date, lactation_duration,
-                       total_milk_production,
-                       avg_daily_yield, early_lactation_yield,
-                       mid_lactation_yield,
-                       delta_early_mid_yield, mean_fat_percent,
-                       mean_protein_percent)),
-           by = c("AniLifeNumber", "InsLacId" = "LacId")
+           get(paste0(farm_prefix, "_insemination")) %>%
+             select(-c(AniBirthday, AniGenId, AniMotherLifeNumber, AniId)),
+           by = c("AniLifeNumber", "LacId" = "InsLacId")
          )
 )
 
+# Add insemination data that produced the first lactation cycles in lactation_summary even though all the milking records will be null for these rows.
+
+first_calvings <- fm5_lactation_summary %>%
+  filter(!is.na(LacCalvingDate)) %>%
+  group_by(AniLifeNumber) %>%
+  slice_min(order_by = LacCalvingDate, n = 1, with_ties = FALSE) %>%
+  ungroup() %>%
+  transmute(AniLifeNumber, first_calving = as.Date(LacCalvingDate))
+
+pre_first_cycle_insem <- fm5_insemination %>%
+  mutate(InsDate = as.Date(InsDate)) %>%
+  inner_join(first_calvings, by = "AniLifeNumber") %>%
+  mutate(first_calving = as.Date(first_calving)) %>%
+  filter(
+    InsDate < as.Date("2013-03-01")) %>%
+  group_by(AniLifeNumber) %>%
+  mutate(max_pre_calving_lacid = if (all(is.na(InsLacId))) NA_integer_ else max(InsLacId, na.rm = TRUE)) %>%
+  filter(!is.na(max_pre_calving_lacid), InsLacId == max_pre_calving_lacid) %>%
+  ungroup() %>%
+  select(-max_pre_calving_lacid, -first_calving)
+
 # Checks
-dim(get(paste0(farm_prefix, "_insem_lactation")))
-colnames(get(paste0(farm_prefix, "_insem_lactation")))
+names(get(paste0(farm_prefix, "_insem_lactation")))
+names(pre_first_cycle_insem)
+
+# Handle mismatch between column names of the table with the new rows to add and the original table
+
+# target object name
+target_name <- paste0(farm_prefix, "_insem_lactation")
+
+# get the current table
+insem_lac <- get(target_name)
+
+# harmonize the pre-first-cycle rows to the target schema
+pre_harmonized <- pre_first_cycle_insem %>%
+  dplyr::rename(LacId = InsLacId) %>%          # align key name
+  dplyr::mutate(source = "pre_first_cycle") %>%# optional provenance
+  # keep only columns that exist in the target; missing ones will be NA on bind
+  dplyr::select(dplyr::any_of(names(insem_lac))) %>%
+  mutate(AniId = as.character(AniId))
+
+# bind, preserving target's column order
+combined <- dplyr::bind_rows(insem_lac, pre_harmonized) %>%
+  dplyr::select(dplyr::all_of(names(insem_lac)))
+
+assign(paste0(farm_prefix, "_insem_lactation_full"), combined)
+
+
+# Checks
+dim(get(paste0(farm_prefix, "_insem_lactation_full")))
+colnames(get(paste0(farm_prefix, "_insem_lactation_full")))
+glimpse(get(paste0(farm_prefix, "_insem_lactation_full")))
 
 # Join pregnancy to insemination+lactation
 assign(paste0(farm_prefix, "_insem_lac_preg"),
-       get(paste0(farm_prefix, "_insem_lactation")) %>%
+       get(paste0(farm_prefix, "_insem_lactation_full")) %>%
          left_join(get(paste0(farm_prefix, "_pregnancy")), by = c("InsId" = "PreInsId"), relationship = "many-to-many")
 )
 
 # Checks
 dim(get(paste0(farm_prefix, "_insem_lac_preg")))
 colnames(get(paste0(farm_prefix, "_insem_lac_preg")))
-# View(insem_lac_preg %>% filter(AniLifeNumber == "FR4404288134")) # visual exam
 
-# De-duplicate when there are multiple pregnancy confirmation dates
+# View(fm1_insem_lac_preg %>% filter(AniLifeNumber == "FR4404288134")) # visual exam
 
-# Deduplicate on InsId (keep latest confirmation)
-assign(paste0(farm_prefix, "_insem_lac_preg"),
+# De-duplicate when there are multiple pregnancy confirmation dates  on InsId (keep latest confirmation)
+assign(paste0(farm_prefix, "_insem_lac_preg_dedup"),
        get(paste0(farm_prefix, "_insem_lac_preg")) %>%
          group_by(InsId) %>%
          arrange(desc(PreDate)) %>%
          slice_head(n = 1) %>%
          ungroup()
 )
-
-# Check
-nrow(get(paste0(farm_prefix, "_insem_lac_preg"))) == nrow(get(paste0(farm_prefix, "_insem_lac_preg")))
 
 # Flag successful inseminations and pregnancies
 assign(paste0(farm_prefix, "_insem_lac_preg"),
