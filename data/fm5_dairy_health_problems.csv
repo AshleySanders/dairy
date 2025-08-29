@@ -1,0 +1,38 @@
+"","DisId","DisDcaId","DisName","DisCurePeriod","DisDescription","DiaAniId","DiaDate","DiaRemarks","DiaWithMilk","DiaWithMeat","AniId","AniLifeNumber"
+"1",66,1,"Mastitis catarrhalis acuta (acute catarrhal mastitis)",14,"",2,2016-05-24,"Mammite (cl.) inconnue - ",2016-05-30 16:53:00,2016-06-25 16:53:00,2,"NL1235469870"
+"2",99,3,"Female infertility",21,"",342,2019-06-11,"",NA,NA,342,"FR4401572222"
+"3",161,11,"Diagnosis not listed in the key",21,"",342,2020-07-15,"",2020-07-21 11:25:00,2020-08-17 11:25:00,342,"FR4401572222"
+"4",10003,11,"Vêlage diffficile",0,"",344,2020-10-11,"",NA,NA,344,"FR4401572218"
+"5",70,1,"Mastitis with isolation of Sc. dysgalactiae (ScC)",14,"",341,2020-12-15,"",2020-12-23 08:01:00,2020-12-28 08:01:00,341,"FR4401572223"
+"6",70,1,"Mastitis with isolation of Sc. dysgalactiae (ScC)",14,"",344,2021-01-06,"",2021-01-13 09:20:00,2021-01-18 09:20:00,344,"FR4401572218"
+"7",29,4,"Lameness",21,"",342,2021-02-24,"Boiterie AVG
+Taille AVG & AVD",NA,NA,342,"FR4401572222"
+"8",98,3,"Metritis",NA,"inflammation of all layers of the uterine wall",343,2021-04-15,"",NA,2021-05-16 12:46:00,343,"FR4401572219"
+"9",10003,11,"Vêlage diffficile",0,"",343,2021-04-19,"",NA,NA,343,"FR4401572219"
+"10",70,1,"Mastitis with isolation of Sc. dysgalactiae (ScC)",14,"",344,2021-04-27,"",2021-05-07 19:25:00,2021-05-10 11:05:00,344,"FR4401572218"
+"11",68,1,"Mastitis catarrhalis subclinica (subclinical mastitis)",14,"infectious inflammation of the mammary gland without clinical signs",342,2021-07-11,"",2021-07-19 12:12:00,2021-07-24 12:12:00,342,"FR4401572222"
+"12",109,3,"Other disturbances of female fertility",21,"",343,2021-08-31,"",NA,NA,343,"FR4401572219"
+"13",29,4,"Lameness",21,"",342,2022-01-14,"",NA,NA,342,"FR4401572222"
+"14",71,1,"Mastitis with isolation of Sc. uberis (ScE)",14,"",200,2022-01-17,"",2022-01-28 11:36:00,2022-02-03 11:37:00,200,""
+"15",71,1,"Mastitis with isolation of Sc. uberis (ScE)",14,"",344,2022-04-15,"",2022-04-24 09:04:00,2022-05-16 09:05:00,344,"FR4401572218"
+"16",68,1,"Mastitis catarrhalis subclinica (subclinical mastitis)",14,"infectious inflammation of the mammary gland without clinical signs",343,2022-07-08,"",2022-07-14 19:37:00,2022-08-09 19:37:00,343,"FR4401572219"
+"17",57,2,"Udder hematoma",21,"",343,2022-07-08,"",NA,NA,343,"FR4401572219"
+"18",98,3,"Metritis",NA,"inflammation of all layers of the uterine wall",342,2022-07-09,"Température suite vêlage - 39.2°C",2022-07-17 08:08:00,2022-09-14 08:08:00,342,"FR4401572222"
+"19",10003,11,"Vêlage diffficile",0,"",342,2022-07-15,"",NA,NA,342,"FR4401572222"
+"20",10001,4,"Abcès",0,"",344,2022-09-12,"NE POSE PASZ LE PIED
+Abcès - du pu sort !?",2022-09-25 11:12:00,2022-10-09 11:12:00,344,"FR4401572218"
+"21",71,1,"Mastitis with isolation of Sc. uberis (ScE)",14,"",344,2022-10-19,"",2022-10-25 08:59:00,2022-11-20 08:59:00,344,"FR4401572218"
+"22",131,7,"Other infectious diseases and microbe-related diseases (except local infections of udder and claws)",21,"",344,2022-10-20,"",2022-10-29 08:35:00,2022-11-10 08:35:00,344,"FR4401572218"
+"23",10003,11,"Vêlage diffficile",0,"",344,2022-10-20,"",NA,NA,344,"FR4401572218"
+"24",10003,11,"Vêlage diffficile",0,"",344,2022-10-20,"",NA,NA,344,"FR4401572218"
+"25",70,1,"Mastitis with isolation of Sc. dysgalactiae (ScC)",14,"",344,2022-11-02,"",2022-11-11 11:07:00,2022-11-13 12:47:00,344,"FR4401572218"
+"26",109,3,"Other disturbances of female fertility",21,"",342,2022-11-08,"",NA,NA,342,"FR4401572222"
+"27",71,1,"Mastitis with isolation of Sc. uberis (ScE)",14,"",344,2022-11-13,"Suite trayon ""bouché"", se trayait mal = quartier fermé = mammite",2022-11-20 09:28:00,2022-12-15 10:12:00,344,"FR4401572218"
+"28",10005,4,"Parage Curatif",0,"",341,2022-11-24,"talonnette AV d",NA,NA,341,"FR4401572223"
+"29",29,4,"Lameness",21,"",343,2022-11-30,"Taille AVD + AVG
+CALE AVG",NA,NA,343,"FR4401572219"
+"30",29,4,"Lameness",21,"",343,2023-01-20,"Abces sous sabot gauche - pied droit (pue)
+Mis cale sabot droit
+Pas de température !",NA,NA,343,"FR4401572219"
+"31",109,3,"Other disturbances of female fertility",21,"",343,2024-04-19,"Fouille -> Piomètrie
+",NA,2024-05-20 10:37:00,343,"FR4401572219"

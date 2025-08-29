@@ -1,16 +1,58 @@
-# Description: The goal of this script is to create the table with all feature variables to analyze herd management strategies per farm.
+# -----------------------------------------------------------------------------
+# Script Name: 06_cow_features_build_and_combine.R
+# Author: Ashley Sanders
+# Date Created: 2025-08-28
+# Last Updated: 2025-08-28
+# Project: Herd Management Strategy Analysis – Cow-Level Feature Construction
+#
+# Description:
+# 1) Builds a per-cow feature table for the active farm (via farm_prefix).
+# 2) Appends (row-binds) the new farm’s features to the existing single-farm
+#    table (originally from fm1), adding a `farm` column for provenance.
+#
+# Inputs (farm-scoped, cached earlier):
+# - <farm>_lactation_metrics
+# - <farm>_insem_lac_preg
+# - <farm>_cow_health_summary
+# - <farm>_dairy_meta
+# - <farm>_animals_slaughter  (join key may be AniLifeNumber or national_number)
+#
+# Also expected in-memory:
+# - fm1_cow_features (original single-farm features you already saved)
+#   OR cow_features (prior table) – script will try both.
+#
+# Outputs:
+# - <farm>_cow_features (cached, farm-specific)
+# - data/<farm>_cow_features.rds
+# - data/<farm>_cow_features.csv
+# - cow_features (combined multi-farm), cached + files
+#
+# Dependencies:
+# - dplyr, tidyr, lubridate, readr (via tidyverse)
+# - ProjectTemplate::cache()
+# - farm config + helpers (farm_prefix, clean_ani, etc.)
+# -----------------------------------------------------------------------------
 
-# ProjectTemplate auto-executes this on load, so avoid reloading data unnecessarily
+# Load config and helpers
+source(here::here("config", "farm5_config.R"))
+source(here::here("lib", "helpers.R"))
 
-# ---Data
-# lactation_metrics
-# cow_health_summary
-# dairy_meta_farm1
-# animals_slaughter_farm1
+# --- Pull farm-scoped tables --------------------------------------------------
+lm   <- get(paste0(farm_prefix, "_lactation_metrics"))
+ilp  <- get(paste0(farm_prefix, "_insem_lac_preg"))
+chs  <- get(paste0(farm_prefix, "_cow_health_summary"))
+dmet <- get(paste0(farm_prefix, "_dairy_meta"))
+asl  <- get(paste0(farm_prefix, "_animals_slaughter"))
+
+# animals_slaughter uses 'national_number', align the key name here:
+if (!"AniLifeNumber" %in% names(asl) && "national_number" %in% names(asl)) {
+  asl <- dplyr::rename(asl, AniLifeNumber = national_number)
+}
+
+# --- Valid cows in scope ------------------------------------------------------
+valid_cow_ids <- unique(lm$AniLifeNumber)
 
 
-
-valid_cow_ids <- unique(lactation_metrics$AniLifeNumber)
 
 # Compute age_at_exit
 exit_age <- lactation_metrics %>%
@@ -37,7 +79,7 @@ endmilk_to_exit <- lactation_metrics %>%
 
 # Calculate aggregate per cow features from lactation_metrics
 
-cow_lactation_summary <- lactation_metrics %>%
+cow_lactation_summary <- fm5_lactation_metrics %>%
   group_by(AniLifeNumber) %>%
   summarise(
     # milk production
@@ -67,6 +109,7 @@ cow_lactation_summary <- lactation_metrics %>%
 
     .groups = "drop"
   )
+
 
 # Calculate the artificial insemination success ratio per cow:
 cow_insem_summary <- lactation_metrics %>%

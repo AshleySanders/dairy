@@ -2,7 +2,7 @@
 # Script Name: 04_dairy_health_measures.R
 # Author: Ashley Sanders
 # Date Created: 2025-07-23
-# Last Updated: 2025-07-29
+# Last Updated: 2025-08-28
 # Project: Herd Management Strategy Analysis – Dairy Cow Health Features
 #
 # Description:
@@ -23,7 +23,7 @@
 # - cache() function from ProjectTemplate or similar
 # -----------------------------------------------------------------------------
 # Load config and helpers
-source(here::here("config", "farm1_config.R"))
+source(here::here("config", "farm5_config.R"))
 source(here::here("lib", "helpers.R"))
 
 # Filter out routine dry-off and vaccination events

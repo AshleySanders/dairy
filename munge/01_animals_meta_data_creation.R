@@ -39,7 +39,7 @@ source(here::here("lib", "helpers.R"))
 assign(paste0(farm_prefix, "_animals_history"),
        animals_history %>%
          filter(customer_id == farm5_customer_id) %>%
-         filter(date < as.Date("2025-03-12")) %>%
+         filter(date < as.Date("2025-03-12")) %>% # Change for each farm
          distinct() %>%
          mutate(
            national_number = clean_ani(animal),
@@ -96,7 +96,7 @@ assign(paste0(farm_prefix, "_HemAnimal"),
 # Capture all national numbers of cows in the herd
 herd_ids <- unique(get(paste0(farm_prefix, "_HemAnimal"))$AniLifeNumber)
 
-# Join HemAnimal with dairy history
+# Join HemAnimal with dairy history and add entry codes & dates
 fm5_dairy_meta <- fm5_dairy_history %>%
   left_join(fm5_HemAnimal, by = c("national_number" = "AniLifeNumber")) %>%
   mutate(
@@ -104,7 +104,6 @@ fm5_dairy_meta <- fm5_dairy_history %>%
     entry_date = if_else(!is.na(entry_date), entry_date,
                          if_else(entry_code == "N", AniBirthday, as.Date(NA)))
   )
-
 
 
 # Quick checks

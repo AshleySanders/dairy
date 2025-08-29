@@ -2,7 +2,7 @@
 # Script Name: 03-lactation_metrics.R
 # Author: Ashley Sanders
 # Date Created: 2025-07-10
-# Last Updated: 2025-08-21
+# Last Updated: 2025-08-28
 # Project: Herd Management Strategy Analysis – Dairy Cow Lactation Cycle Metrics
 #
 # Description:
@@ -49,7 +49,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Load config and helpers
-source(here::here("config", "farm1_config.R"))
+source(here::here("config", "farm5_config.R"))
 source(here::here("lib", "helpers.R"))
 
 # Determine if the cow is likely still milking, clean id numbers, and calculate estimated conserved and delivered milk quantities
@@ -72,7 +72,77 @@ assign(paste0(farm_prefix, "_lactation_summary"),
 )
 
 
-# Calculate age at calving for each lactation cycle
+#--- Fill in AniBirthday where missing -----------------------------------------
+assign(
+  paste0(farm_prefix, "_lactation_summary"),
+  get(paste0(farm_prefix, "_lactation_summary")) %>%
+    group_by(AniLifeNumber) %>%
+    mutate(AniBirthday = first(na.omit(AniBirthday))) %>%
+    ungroup()
+)
+
+# --- Look up & replace missing birth dates ------------------------------------
+
+animals_lookup <- get(paste0(farm_prefix, "_HemAnimal")) %>%
+  mutate(
+    AniLifeNumber = clean_ani(AniLifeNumber),
+    AniBirthday   = as.Date(AniBirthday)
+  ) %>%
+  filter(!is.na(AniLifeNumber), AniLifeNumber != "") %>%
+  group_by(AniLifeNumber) %>%
+  summarise(
+    # choose a single birthday per cow; earliest non-missing is a safe default
+    AniBirthday_lookup = suppressWarnings(min(AniBirthday, na.rm = TRUE)),
+    .groups = "drop"
+  )
+
+
+fill_birthdays_from_HemAnimal <- function(df, id_col = "AniLifeNumber", bday_col = "AniBirthday") {
+  id_sym   <- rlang::sym(id_col)
+  bday_sym <- rlang::sym(bday_col)
+
+  df %>%
+    mutate(
+      !!id_sym   := clean_ani(!!id_sym),
+      !!bday_sym := as.Date(!!bday_sym)
+    ) %>%
+    left_join(
+      animals_lookup,
+      by = setNames("AniLifeNumber", id_col)  # join: df[[id_col]] == animals_lookup$AniLifeNumber
+    ) %>%
+    mutate(
+      !!bday_sym := dplyr::coalesce(!!bday_sym, .data$AniBirthday_lookup)
+    ) %>%
+    select(-AniBirthday_lookup)
+}
+
+target_name <- paste0(farm_prefix, "_lactation_summary")
+df          <- get(target_name)
+
+before_missing <- sum(is.na(df$AniBirthday))
+message("Missing AniBirthday BEFORE: ", before_missing)
+
+df_filled <- fill_birthdays_from_HemAnimal(df, id_col = "AniLifeNumber", bday_col = "AniBirthday")
+
+after_missing <- sum(is.na(df_filled$AniBirthday))
+message("Missing AniBirthday AFTER:  ", after_missing,
+        " (filled: ", before_missing - after_missing, ")")
+
+# Run lib/05_farm5_fix_missing_birthdays_lac_summary.R to identify and replace the final missing birth dates
+
+
+# --- Use df_filled to update farmX_lactation_summary table---------------------
+
+# Be sure to change the farm number if needed for other farms
+target_name <- paste0(farm_prefix, "_lactation_summary")
+
+assign(target_name, df_filled, envir = .GlobalEnv)
+
+# Checks
+sum(is.na(fm5_lactation_summary$AniLifeNumber))
+sum(is.na(fm5_lactation_summary$AniBirthday))
+
+# --- Calculate age at calving for each lactation cycle ------------------------
 assign(paste0(farm_prefix, "_age_at_calving"),
        get(paste0(farm_prefix, "_lactation_summary")) %>%
          filter(RemLactation_LacNumber > 0, !is.na(AniBirthday), !is.na(LacCalvingDate), !is.na(LacId)) %>%
@@ -135,27 +205,49 @@ assign(paste0(farm_prefix, "_lactation_metrics"),
 
 
 # Calving to insemination interval
-assign(paste0(farm_prefix, "_calving_to_insem"),
-       get(paste0(farm_prefix, "_insem_lac_preg")) %>%
-         group_by(AniLifeNumber, InsLacId) %>%
-         summarise(
-           calving_to_insem_days = if (any(InsNumber == 1)) {
-             as.numeric(first(InsDate[InsNumber == 1]) - first(LacCalvingDate))
-           } else { NA_real_ },
-           .groups = "drop"
-         )
+assign(
+  paste0(farm_prefix, "_calving_to_insem"),
+  get(paste0(farm_prefix, "_insem_lac_preg")) %>%
+    dplyr::mutate(
+      InsDate = as.Date(InsDate),
+      LacCalvingDate = as.Date(LacCalvingDate)
+    ) %>%
+    dplyr::group_by(AniLifeNumber, LacId) %>%
+    dplyr::summarise(
+      # Did we observe an InsNumber == 1 in this (cow, lactation)?
+      has_first_insem = any(InsNumber == 1, na.rm = TRUE),
+
+      # First insemination date where InsNumber == 1 (if present)
+      first_insem_date = case_when(
+        has_first_insem ~ suppressWarnings(min(InsDate[InsNumber == 1], na.rm = TRUE)),
+        TRUE            ~ as.Date(NA)
+      ),
+
+      # Calving date for the lactation (min handles duplicates/NA)
+      calving_date = suppressWarnings(min(LacCalvingDate, na.rm = TRUE)),
+
+      # Difference in days (guard if any piece is missing/infinite)
+      calving_to_insem_days = case_when(
+        !is.na(first_insem_date) & is.finite(as.numeric(calving_date)) ~
+          as.numeric(first_insem_date - calving_date),
+        TRUE ~ NA_real_
+      ),
+      .groups = "drop"
+    ) %>%
+    dplyr::select(-has_first_insem)
 )
+
 
 assign(paste0(farm_prefix, "_lactation_metrics"),
        get(paste0(farm_prefix, "_lactation_metrics")) %>%
-         left_join(get(paste0(farm_prefix, "_calving_to_insem")), by = c("AniLifeNumber", "LacId" = "InsLacId"))
+         left_join(get(paste0(farm_prefix, "_calving_to_insem")), by = c("AniLifeNumber", "LacId"))
 )
 
 
 # Number of failed pregnancies per lactation cycle
 assign(paste0(farm_prefix, "_failed_pregnancies"),
        get(paste0(farm_prefix, "_insem_lac_preg")) %>%
-         group_by(InsLacId) %>%
+         group_by(LacId) %>%
          summarise(
            n_failed_pregnancies = sum(successful_pregnancy == FALSE,
                                       na.rm = TRUE),
@@ -165,7 +257,7 @@ assign(paste0(farm_prefix, "_failed_pregnancies"),
 
 assign(paste0(farm_prefix, "_lactation_metrics"),
        get(paste0(farm_prefix, "_lactation_metrics")) %>%
-         left_join(get(paste0(farm_prefix, "_failed_pregnancies")), by = c("LacId" = "InsLacId")) %>%
+         left_join(get(paste0(farm_prefix, "_failed_pregnancies")), by = "LacId") %>%
          mutate(n_failed_pregnancies = replace_na(n_failed_pregnancies, 0))
 )
 
