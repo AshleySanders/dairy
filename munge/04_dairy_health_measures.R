@@ -35,9 +35,6 @@ assign(paste0(farm_prefix, "_dairy_health_problems"),
          )
 )
 
-
-cache(paste0(farm_prefix, "_dairy_health_problems"))
-
 # Standardize IDs and convert date
 assign(paste0(farm_prefix, "_dairy_health_problems"),
        get(paste0(farm_prefix, "_dairy_health_problems")) %>%
@@ -46,6 +43,8 @@ assign(paste0(farm_prefix, "_dairy_health_problems"),
            DiaDate = as.Date(DiaDate)
          )
 )
+
+cache(paste0(farm_prefix, "_dairy_health_problems"))
 
 # Aggregate per-cow health metrics
 # - n_health_problems: total count of events

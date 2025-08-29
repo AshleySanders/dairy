@@ -52,13 +52,11 @@ if (!"AniLifeNumber" %in% names(asl) && "national_number" %in% names(asl)) {
 # --- Valid cows in scope ------------------------------------------------------
 valid_cow_ids <- unique(lm$AniLifeNumber)
 
-
-
-# Compute age_at_exit
-exit_age <- lactation_metrics %>%
+# --- Exit-related features ----------------------------------------------------
+exit_age <- lm %>%
   # keep only the final lactation where the cow actually exited
-  filter(last_lactation == TRUE, !is.na(exit_date)) %>%
-  transmute(
+  dplyr::filter(last_lactation == TRUE, !is.na(exit_date)) %>%
+  dplyr::transmute(
     AniLifeNumber,
     # calculate age at exit in whole months
     age_at_exit = interval(as.Date(AniBirthday), as.Date(exit_date)) %/% months(1)
@@ -66,126 +64,160 @@ exit_age <- lactation_metrics %>%
   distinct()
 
 # Compute number of days between last milking date and exit date
-endmilk_to_exit <- lactation_metrics %>%
+endmilk_to_exit <- lm %>%
   # Keep only the last lactation cycle where the cow actually exited
-  filter(last_lactation == TRUE, !is.na(exit_date)) %>%
+  dplyr::filter(last_lactation == TRUE, !is.na(exit_date)) %>%
   # Compute the days from end of milking to exit
-  transmute(
+  dplyr::transmute(
     AniLifeNumber,
     endmilk_to_exit_days = as.numeric(exit_date - milk_production_end_date)
   ) %>%
   # In case there is more than one record per cow (shouldn't normally happen), keep unique
-  distinct()
-
-# Calculate aggregate per cow features from lactation_metrics
-
-cow_lactation_summary <- fm5_lactation_metrics %>%
   group_by(AniLifeNumber) %>%
   summarise(
+    endmilk_to_exit_days = max(endmilk_to_exit_days, na.rm = TRUE),  # or min/first
+    .groups = "drop"
+  )
+
+
+# --- Aggregations from lactation metrics --------------------------------------
+cow_lactation_summary <- lm %>%
+  dplyr::group_by(AniLifeNumber) %>%
+  dplyr::summarise(
     # milk production
-    avg_early_lactation_yield = mean(early_lactation_yield, na.rm = TRUE),
-    avg_mid_lactation_yield  = mean(mid_lactation_yield, na.rm = TRUE),
-    avg_delta_early_mid_yield = mean(delta_early_mid_yield, na.rm = TRUE),
-    avg_daily_yield           = mean(avg_daily_yield, na.rm = TRUE),
-    avg_total_milk            = mean(total_milk_production, na.rm = TRUE),
+    avg_early_lactation_yield  = mean(early_lactation_yield, na.rm = TRUE),
+    avg_mid_lactation_yield    = mean(mid_lactation_yield, na.rm = TRUE),
+    avg_delta_early_mid_yield  = mean(delta_early_mid_yield, na.rm = TRUE),
+    avg_daily_yield            = mean(avg_daily_yield, na.rm = TRUE),
+    avg_total_milk             = mean(total_milk_production, na.rm = TRUE),
 
     # reproductive metrics
-    avg_insem                 = mean(n_insem, na.rm = TRUE),
-    avg_failed_insem          = mean(n_failed_insem, na.rm = TRUE),
-    avg_failed_pregnancies    = mean(n_failed_pregnancies, na.rm = TRUE),
-    avg_calving_to_insem      = mean(calving_to_insem_days, na.rm = TRUE),
+    avg_insem                  = mean(n_insem, na.rm = TRUE),
+    avg_failed_insem           = mean(n_failed_insem, na.rm = TRUE),
+    avg_failed_pregnancies     = mean(n_failed_pregnancies, na.rm = TRUE),
+    avg_calving_to_insem       = mean(calving_to_insem_days, na.rm = TRUE),
 
     # lifecycle metrics
-    number_lactations         = max(pmax(RemLactation_LacNumber, CalculatedLactationCycle), na.rm = TRUE),
-    avg_lactation_duration    = mean(lactation_duration, na.rm = TRUE),
-    avg_dry_interval          = mean(dry_off_interval, na.rm = TRUE),
-    n_intervals               = sum(!is.na(dry_off_interval)),
-    age_at_first_calving      = min(age_at_calving, na.rm = TRUE),
-    latest_lactation_date     = max(milk_production_start_date, na.rm = TRUE),
+    number_lactations          = max(pmax(RemLactation_LacNumber,
+                                          CalculatedLactationCycle), na.rm = TRUE),
+    avg_lactation_duration     = mean(lactation_duration, na.rm = TRUE),
+    avg_dry_interval           = mean(dry_off_interval, na.rm = TRUE),
+    n_intervals                = sum(!is.na(dry_off_interval)),
+    age_at_first_calving       = min(age_at_calving, na.rm = TRUE),
+    latest_lactation_date      = max(milk_production_start_date, na.rm = TRUE),
 
-    # animal descriptors (will be recycled per group)
-    AniBirthday               = first(AniBirthday),
-    AniGenId                  = first(AniGenId),
-
+    # animal descriptors
+    AniBirthday                = dplyr::first(AniBirthday),
+    AniGenId                   = dplyr::first(AniGenId),
     .groups = "drop"
   )
 
+# Create a column for birth_year and identify quartile cut points
+cow_lactation_summary <- cow_lactation_summary %>% mutate(birth_year = year(AniBirthday))
+summary(cow_lactation_summary$birth_year)
 
-# Calculate the artificial insemination success ratio per cow:
-cow_insem_summary <- lactation_metrics %>%
-  group_by(AniLifeNumber) %>%
-  summarise(
-    total_insem        = sum(coalesce(n_insem, 0L), na.rm = TRUE),
-    total_successes    = sum(coalesce(n_insem, 0L) -
-                               coalesce(n_failed_insem, 0L), na.rm = TRUE),
-    insem_success_ratio = if_else(total_insem > 0,
-                                  total_successes / total_insem,
-                                  NA_real_),
+
+# --- Insemination summaries ---------------------------------------------------
+cow_insem_summary <- lm %>%
+  dplyr::group_by(AniLifeNumber) %>%
+  dplyr::summarise(
+    total_insem         = sum(coalesce(n_insem, 0L), na.rm = TRUE),
+    total_successes     = sum(coalesce(n_insem, 0L) - coalesce(n_failed_insem, 0L), na.rm = TRUE),
+    insem_success_ratio = if_else(total_insem > 0, total_successes / total_insem, NA_real_),
     .groups = "drop"
   )
 
-cow_age_at_first_insem <- insem_lac_preg %>%
-  arrange(AniLifeNumber, InsDate) %>%
-  group_by(AniLifeNumber) %>%
-  slice(1) %>%
-  ungroup() %>%
-  mutate(
+cow_age_at_first_insem <- ilp %>%
+  dplyr::arrange(AniLifeNumber, InsDate) %>%
+  dplyr::group_by(AniLifeNumber) %>%
+  dplyr::slice(1) %>%
+  dplyr::ungroup() %>%
+  dplyr::mutate(
     age_at_first_insem = interval(as.Date(AniBirthday), as.Date(InsDate)) %/% months(1),
-    first_insem_date = InsDate
+    first_insem_date   = InsDate
   ) %>%
-  select(c(AniLifeNumber, age_at_first_insem, InsDate)) %>%
-  filter(AniLifeNumber %in% valid_cow_ids)
+  dplyr::select(AniLifeNumber, age_at_first_insem, InsDate) %>%
+  dplyr::filter(AniLifeNumber %in% valid_cow_ids)
 
-cow_age_first_success_insem <- insem_lac_preg %>%
-  filter(successful_insem == TRUE) %>%
-  arrange(AniLifeNumber, InsDate) %>%
-  group_by(AniLifeNumber) %>%
-  slice(1) %>%
-  ungroup() %>%
-  mutate(
+cow_age_first_success_insem <- ilp %>%
+  dplyr::filter(successful_insem == TRUE) %>%
+  dplyr::arrange(AniLifeNumber, InsDate) %>%
+  dplyr::group_by(AniLifeNumber) %>%
+  dplyr::slice(1) %>%
+  dplyr::ungroup() %>%
+  dplyr::mutate(
     age_first_successful_insem = interval(AniBirthday, InsDate) %/% months(1)
   ) %>%
-  select(AniLifeNumber, age_first_successful_insem) %>%
-  filter(AniLifeNumber %in% valid_cow_ids)
+  dplyr::select(AniLifeNumber, age_first_successful_insem) %>%
+  dplyr::filter(AniLifeNumber %in% valid_cow_ids)
 
 
-# Join everything into cow_features ---
-cow_features <- cow_lactation_summary %>%
-  left_join(dairy_meta_farm1 %>%
-              select(-c(AniId, AniGenId, AniBirthday, AniActive, AniMotherLifeNumber, date, customer_id)), by = "AniLifeNumber") %>%
-  left_join(exit_age, by = "AniLifeNumber") %>%
-  left_join(endmilk_to_exit, by = "AniLifeNumber") %>%
-  left_join(cow_insem_summary, by = "AniLifeNumber") %>%
-  left_join(cow_age_at_first_insem, by = "AniLifeNumber") %>%
-  left_join(cow_age_first_success_insem, by = "AniLifeNumber") %>%
-  left_join(cow_health_summary, by = "AniLifeNumber") %>%
-  left_join(animals_slaughter_farm1, by = "AniLifeNumber")
-
-# Replace NAs with 0s for 2 variables that come from cow_health_summary
-cow_features <- cow_features %>%
-  mutate(
-    n_health_problems = replace_na(n_health_problems, 0),
-    recovery_duration = replace_na(recovery_duration,   0)
+#- -- Join everything into cow_features ----------------------------------------
+farm_cow_features <- cow_lactation_summary %>%
+  dplyr::left_join(
+    dmet %>% dplyr::select(-c(AniId, AniGenId, AniBirthday, AniActive, AniMotherLifeNumber, date, customer_id)),
+    by = c("AniLifeNumber" = "national_number")
+  ) %>%
+  dplyr::left_join(exit_age,                        by = "AniLifeNumber") %>%
+  dplyr::left_join(endmilk_to_exit,                 by = "AniLifeNumber") %>%
+  dplyr::left_join(cow_insem_summary,               by = "AniLifeNumber") %>%
+  dplyr::left_join(cow_age_at_first_insem,          by = "AniLifeNumber") %>%
+  dplyr::left_join(cow_age_first_success_insem,     by = "AniLifeNumber") %>%
+  dplyr::left_join(chs,                             by = "AniLifeNumber") %>%
+  dplyr::left_join(asl,                             by = "AniLifeNumber") %>%
+  dplyr::mutate(
+    n_health_problems = tidyr::replace_na(n_health_problems, 0),
+    recovery_duration = tidyr::replace_na(recovery_duration, 0)
+  ) %>%
+  dplyr::mutate(
+    birth_year = lubridate::year(AniBirthday),
+    cohort = dplyr::case_when(
+      birth_year < 2013                       ~ "pre-2013",
+      birth_year >= 2013 & birth_year <= 2016 ~ "2013-2016",
+      birth_year >= 2016 & birth_year <= 2019 ~ "2016-2019",
+      birth_year >= 2019                      ~ "2019+",
+      TRUE                                    ~ NA_character_
+    ),
+    farm = farm_id   # <-- provenance column
   )
 
-# Create cohorts
-cow_features <- cow_features %>%
-  mutate(
-    # 1. Extract the birth year
-    birth_year = year(AniBirthday),
+#--- assign + cache farm-specific table (e.g., fm5_cow_features) ---------------
+assign(paste0(farm_prefix, "_cow_features"), farm_cow_features, envir = .GlobalEnv)
+cache(paste0(farm_prefix, "_cow_features"))
+readr::write_rds(farm_cow_features, here::here("data", paste0(farm_prefix, "_cow_features.rds")))
+readr::write_csv(farm_cow_features, here::here("data", paste0(farm_prefix, "_cow_features.csv")))
 
-    # 2. Assign to cohort buckets
-    cohort = case_when(
-      birth_year < 2016                    ~ "pre-2016",
-      birth_year >= 2016 & birth_year <= 2018 ~ "2016-2018",
-      birth_year >= 2019 & birth_year <= 2021 ~ "2019-2021",
-      birth_year >= 2022                   ~ "2022+",
-      TRUE                                  ~ NA_character_
-    ))
+# --- Build/append the combined multi-farm cow_features ------------------------
+# Prefer an in-memory 'cow_features' if present; else fall back to fm1_cow_features.
+existing_cf <- if (!is.null(get0("cow_features"))) {
+  get("cow_features")
+} else if (!is.null(get0("fm1_cow_features"))) {
+  get("fm1_cow_features")
+} else {
+  NULL
+}
 
+# Ensure existing has a 'farm' column; if it's fm1-only and missing, tag it.
+if (!is.null(existing_cf) && !"farm" %in% names(existing_cf)) {
+  # If this table is known to be fm1, label it as such
+  existing_cf <- dplyr::mutate(existing_cf, farm = "farm1")
+}
 
-# Save or View the result ---
+# Bind + keep consistent column order (dplyr will pad missing columns with NA)
+combined_cf <- if (is.null(existing_cf)) {
+  farm_cow_features
+} else {
+  # ensure both have same col set
+  all_cols <- union(names(existing_cf), names(farm_cow_features))
+  dplyr::bind_rows(
+    dplyr::select(existing_cf, dplyr::any_of(all_cols)),
+    dplyr::select(farm_cow_features, dplyr::any_of(all_cols))
+  ) %>%
+    dplyr::select(dplyr::all_of(all_cols))
+}
+
+# Write back the combined table as 'cow_features'
+assign("cow_features", combined_cf, envir = .GlobalEnv)
 cache("cow_features")
-saveRDS(cow_features, here("data", "cow_features.rds"))
-write.csv(cow_features, here("data", "cow_features.csv"), row.names = TRUE)
-
+readr::write_rds(combined_cf, here::here("data", "cow_features.rds"))
+readr::write_csv(combined_cf, here::here("data", "cow_features.csv"))
