@@ -219,7 +219,7 @@ boxplot(lactation_with_intervals$insem_to_dryoff, horizontal = TRUE, main = "Int
 # 6. Fattening or immediate sale to abattoir?
 summary(fm5_cow_features$endmilk_to_exit_days)
 ggplot(data = fm5_cow_features, aes(x=exit_date, y=endmilk_to_exit_days)) +
-  geom_point(aes(color = "red")) +
+  geom_point(alpha = 0.6, color = "steelblue", size = 1.4) +
   labs(title = "Number of Days Between the Last Milking and Exit",
        x = "Exit Date",
        y = "Number of Days") +
@@ -228,8 +228,12 @@ ggplot(data = fm5_cow_features, aes(x=exit_date, y=endmilk_to_exit_days)) +
 boxplot(fm5_cow_features$endmilk_to_exit_days, horizontal = TRUE,
         main = "Number of Days Between the Last Milking and Exit")
 
-fm5_cow_features %>% identify_outliers(endmilk_to_exit_days) %>%
+fm5_long_exit_cows <- fm5_cow_features %>% identify_outliers(endmilk_to_exit_days) %>%
   select(c(AniLifeNumber, AniBirthday, exit_date, endmilk_to_exit_days))
+
+View(fm5_long_exit_cows) # may want to investigate further as to cause
+
+#-------------------------------------------------------------------------------
 
 # Examine a possible change in Farm 1's strategy in mid-2024
 
@@ -246,45 +250,38 @@ fm5_cow_features %>% identify_outliers(endmilk_to_exit_days) %>%
 
 #-------------------------------------------------------------------------------
 
-# Doublecheck and verify exit dates with slaughter dates.
-exit_date_check <- fm5_cow_features %>%
-  select(c(AniLifeNumber, exit_date, slaughter_date)) %>%
-  mutate(
-    exit_check = interval(as.Date(slaughter_date), as.Date(exit_date)) %/% days(1))
-
 # 7. Average number of days in each cow’s lactation cycle over the lifetime of the cow
 summary(fm5_cow_features$avg_lactation_duration)
+
 boxplot(fm5_cow_features$avg_lactation_duration, horizontal = TRUE,
         main = "Average Lactation Duration",
         xlab = "Number of Days")
 
-lactation_metrics %>% filter(lactation_duration < 216) %>% select(c(AniLifeNumber, milk_production_start_date, milk_production_end_date, exit_date))
+fm5_lactation_metrics %>% filter(still_milking == FALSE) %>% select(c(AniLifeNumber, milk_production_start_date, milk_production_end_date, exit_date))
 
-View(lactation_metrics %>% filter(identify_outliers(lactation_duration)))
+View(fm5_lactation_metrics %>% filter(identify_outliers(lactation_duration)))
 
-lactation_outliers <- lactation_metrics %>% identify_outliers(lactation_duration)
-View(lactation_outliers)
+fm5_lactation_outliers <- lactation_metrics %>% identify_outliers(lactation_duration)
+View(fm5_lactation_outliers)
 
 # Remove lactation cycles for cows who are still milking.
-lactation_metrics %>%
+fm5_lactation_metrics %>%
   filter(still_milking == FALSE) %>%
   pull(lactation_duration) %>%
   summary()
 
 # Examine potential trends over time.
-ggplot(fm5_cow_features, aes(x=AniBirthday, y = avg_lactation_duration)) +
+valid_births <- fm5_lactation_metrics %>%
+  filter(age_at_calving > 21)
+
+ggplot(valid_births, aes(x=AniBirthday, y = lactation_duration)) +
   geom_point() +
   geom_smooth(method = "lm") +
   labs(title = "Cow's Average Lactation Duration by Birth Year",
        x = "Birth Year",
        y = "Number of days") +
-  theme_classic() +
-  theme(
-    panel.grid.major = element_blank(),
-    panel.grid.minor = element_blank(),
-    panel.background = element_blank(),
-    axis.line = element_line(colour = "black")
-  )
+  theme_classic()
+
 
 ggplot(fm5_cow_features, aes(x=exit_date, y = avg_lactation_duration)) +
   geom_point() +
@@ -292,18 +289,12 @@ ggplot(fm5_cow_features, aes(x=exit_date, y = avg_lactation_duration)) +
   labs(title = "Cow's Average Lactation Duration Over Time",
        x = "Exit Date",
        y = "Number of Days") +
-  theme_classic() +
-  theme(
-    panel.grid.major = element_blank(),
-    panel.grid.minor = element_blank(),
-    panel.background = element_blank(),
-    axis.line = element_line(colour = "black")
-  )
+  theme_classic()
 
 
 # Examination of potential correlation between cow's age at calving and lactation duration
 
-ggplot(lactation_metrics, aes(x = age_at_calving, y = lactation_duration,
+ggplot(valid_births, aes(x = age_at_calving, y = lactation_duration,
                               color = last_lactation)) +
   geom_point() +
   scale_color_manual(
@@ -311,28 +302,18 @@ ggplot(lactation_metrics, aes(x = age_at_calving, y = lactation_duration,
     values = c(`FALSE` = "grey20", `TRUE` = "blue"),
     labels = c("Not Last", "Last")
   ) +
+  scale_x_continuous(breaks = seq(0, 140, by = 20), limits = c(1, 140)) +
   labs(title = "Lactation duration versus age at calving",
        x =" Age at Calving",
        y = "Lactation Duration (days)") +
-  theme_classic() +
-  theme(
-    panel.grid.major = element_blank(),
-    panel.grid.minor = element_blank(),
-    panel.background = element_blank(),
-    axis.line = element_line("black")
-  )
+  theme_classic()
 
-ggplot(lactation_metrics, aes(x = last_lactation, y = lactation_duration)) +
+ggplot(valid_births, aes(x = last_lactation, y = lactation_duration)) +
   geom_boxplot() +
   labs(x = "Last Lactation?", y = "Duration (days)") +
-  theme_classic() +
-  theme(
-    panel.background = element_blank(),
-    panel.grid.major = element_blank(),
-    panel.grid.minor = element_blank()
-  )
+  theme_classic()
 
-hist(lactation_metrics$age_at_calving)
+hist(valid_births$age_at_calving)
 
 # 8. Compare the younger cows' shorter lactation duration (above) with trends in milk production
 summary(fm5_cow_features$avg_total_milk) # all cows
@@ -342,13 +323,7 @@ ggplot(fm5_cow_features, aes(x=AniBirthday, y = avg_total_milk)) +
   labs(title = "Milk Production",
        x = "Birthdate",
        y = "Milk Production (liters)") +
-  theme_classic() +
-  theme(
-    panel.background = element_blank(),
-    panel.grid.major = element_blank(),
-    panel.grid.minor = element_blank(),
-    axis.line = element_line("black")
-  )
+  theme_classic()
 
 # Milk production over time
 ggplot(fm5_cow_features, aes(x=exit_date, y = avg_total_milk)) +
@@ -357,13 +332,7 @@ ggplot(fm5_cow_features, aes(x=exit_date, y = avg_total_milk)) +
   labs(title = "Milk Production Over Time",
        x = "Exit Date",
        y = "Milk Production (liters)") +
-  theme_classic() +
-  theme(
-    panel.background = element_blank(),
-    panel.grid.major = element_blank(),
-    panel.grid.minor = element_blank(),
-    axis.line = element_line("black")
-  )
+  theme_classic()
 
 # 9. Milk production summary
 summary(fm5_cow_features$avg_total_milk)
@@ -373,6 +342,7 @@ boxplot(fm5_cow_features$avg_total_milk, horizontal = TRUE,
 
 # 10. Lifespan of Cows
 summary(fm5_cow_features$age_at_exit)
+
 hist(fm5_cow_features$age_at_exit,
      main = "Cows' Age at Exit",
      xlab = "Age (Months)",
@@ -381,16 +351,18 @@ hist(fm5_cow_features$age_at_exit,
 # 11. Calving to Insemination
 summary(fm5_cow_features$avg_calving_to_insem)
 
-# Visually examine the distribution - histogram
+# Farm comparisons
+boxplot(avg_calving_to_insem ~ farm, data = cow_features,
+        main = "Average Time between Calving & the Next AI",
+        ylab = "Number of Days")
+
+t.test(avg_calving_to_insem ~ farm, data = cow_features) # Switch to ANOVA with more farms
+
+# Visually examine the individual farm distribution - histogram
 hist(fm5_cow_features$avg_calving_to_insem,
      main = "Average Time Between Calving & the Next AI",
      xlab = "Days",
      ylab = "Number of Cows")
-
-# Boxplot of the distribution, which indicates outliers
-boxplot(fm5_cow_features$avg_calving_to_insem, horizontal = TRUE,
-        main = "Average Time Between Calving & the Next AI",
-        xlab = "Number of Days")
 
 # View outliers
 fm5_cow_features %>% identify_outliers(avg_calving_to_insem) %>%
@@ -430,7 +402,7 @@ pairs(tmp,
 
 # Create a metric for services per conception to examine reproductive efficiency
 # and summarize
-lactation_metrics %>%
+fm5_lactation_metrics %>%
   mutate(services_per_conception = n_insem / (n_failed_pregnancies + 1)) %>%
   summarise(
     median = median(services_per_conception, na.rm = TRUE),
@@ -438,7 +410,7 @@ lactation_metrics %>%
   )
 
 # Examine tail of the distribution to see cycles with multiple services:
-lactation_metrics %>%
+fm5_lactation_metrics %>%
   mutate(svc_per_conc = n_insem / (n_failed_pregnancies + 1)) %>%
   count(svc_per_conc) %>%
   arrange(desc(svc_per_conc)) %>%
@@ -446,17 +418,57 @@ lactation_metrics %>%
 
 
 # 12. Calving interval patterns
-summary(lactation_metrics$calving_interval_days)
+summary(fm5_lactation_metrics$calving_interval_days)
 
 # Visual analysis of the distribution & outliers
-hist(lactation_metrics$calving_interval_days,
+hist(fm5_lactation_metrics$calving_interval_days,
      main = "Interval Between Calvings",
      xlab = "Number of Days",
      ylab = "Number of Cows")
 
-boxplot(lactation_metrics$calving_interval_days, horizontal = TRUE,
+boxplot(fm5_lactation_metrics$calving_interval_days, horizontal = TRUE,
         main = "Interval Between Calvings",
         xlab = "Number of Days")
+
+# Difference between farms
+fm1_lactation_metrics <- fm1_lactation_metrics %>%
+  mutate(
+    farm = "farm1"
+  )
+
+fm5_lactation_metrics <- fm5_lactation_metrics %>%
+  mutate(
+    farm = "farm5"
+  )
+
+# --- Build/append the combined multi-farm lactation_metrics--------------------
+
+class(fm1_lactation_metrics$AniId)
+class(fm5_lactation_metrics$AniId)
+
+fm5_lactation_metrics <- fm5_lactation_metrics %>%
+  mutate(
+    AniId = as.integer(AniId)
+  )
+
+# Bind + keep consistent column order (dplyr will pad missing columns with NA)
+combined_lactation_metrics <- if (is.null(fm1_lactation_metrics)) {
+  lactation_metrics
+} else {
+  # ensure both have same col set
+  all_cols <- union(names(fm1_lactation_metrics), names(fm5_lactation_metrics))
+  dplyr::bind_rows(
+    dplyr::select(fm1_lactation_metrics, dplyr::any_of(all_cols)),
+    dplyr::select(fm5_lactation_metrics, dplyr::any_of(all_cols))
+  ) %>%
+    dplyr::select(dplyr::all_of(all_cols))
+}
+
+boxplot(calving_interval_days ~ farm, data = combined_lactation_metrics,
+        ylab = "Calving Interval (Days)")
+
+t.test(calving_interval_days ~ farm, data = combined_lactation_metrics)
+
 
 # 13. The script for the milk yield analysis is available in 02_single_variable_milk_yield_analysis.R
 

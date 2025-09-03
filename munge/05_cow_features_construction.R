@@ -44,8 +44,8 @@ chs  <- get(paste0(farm_prefix, "_cow_health_summary"))
 dmet <- get(paste0(farm_prefix, "_dairy_meta")) # now contains slaughter details
 
 # animals_slaughter uses 'national_number', align the key name here:
-if (!"AniLifeNumber" %in% names(asl) && "national_number" %in% names(asl)) {
-  asl <- dplyr::rename(asl, AniLifeNumber = national_number)
+if (!"AniLifeNumber" %in% names(dmet) && "national_number" %in% names(dmet)) {
+  dmet <- dplyr::rename(dmet, AniLifeNumber = national_number)
 }
 
 # --- Valid cows in scope ------------------------------------------------------

@@ -13,7 +13,7 @@ library(pwr)
 
 # --- Age at Calving ---
 # Split ages of cows into groups
-lactation_metrics <- lactation_metrics %>%
+fm5_lactation_metrics <- fm5_lactation_metrics %>%
   mutate(
     age_at_calving_yrs = case_when(
       between(age_at_calving, 24, 35)  ~ "2 years",
@@ -37,29 +37,29 @@ lactation_metrics <- lactation_metrics %>%
 
 # Check assumptions to determine appropriate test type
 # Number of observations in each group
-table(lactation_metrics$age_at_calving_yrs)
+table(fm5_lactation_metrics$age_at_calving_yrs)
 
 # Means of milk production for each age group
-milk_means <- tapply(lactation_metrics$total_milk_production, INDEX = lactation_metrics$age_at_calving_yrs, FUN = mean)
+milk_means <- tapply(fm5_lactation_metrics$total_milk_production, INDEX = fm5_lactation_metrics$age_at_calving_yrs, FUN = mean)
 
 milk_means # View means by group
 
 # Check the equality of variance
 # Calculate the standard deviations for each of the groups
-milk_sds <- tapply(lactation_metrics$total_milk_production, INDEX = lactation_metrics$age_at_calving_yrs, FUN = sd)
+milk_sds <- tapply(fm5_lactation_metrics$total_milk_production, INDEX = fm5_lactation_metrics$age_at_calving_yrs, FUN = sd)
 
 # Calculate the quotient of max & min SDs. If < 2, assume equality of variance
 max(milk_sds)/min(milk_sds)
 
 # Check normality assumption
-milk_meancen <- lactation_metrics$total_milk_production - milk_means[as.numeric(lactation_metrics$age_at_calving_yrs)] # Calculated group-wise mean-centered values (residuals)
+milk_meancen <- fm5_lactation_metrics$total_milk_production - milk_means[as.numeric(fm5_lactation_metrics$age_at_calving_yrs)] # Calculated group-wise mean-centered values (residuals)
 
 qqnorm(milk_meancen, main = "Normal QQ plot of residuals")
 
 qqline(milk_meancen)
 
 # Fit 1-way ANOVA
-fit <- aov(total_milk_production ~ age_at_calving_yrs, data = lactation_metrics)
+fit <- aov(total_milk_production ~ age_at_calving_yrs, data = fm5_lactation_metrics)
 summary(fit) # View results of ANOVA
 
 # Different assumption tests
@@ -67,14 +67,14 @@ summary(fit) # View results of ANOVA
 shapiro.test(residuals(fit))
 
 # Homogeneity of variance
-leveneTest(total_milk_production ~ age_at_calving_yrs, data = lactation_metrics)
+leveneTest(total_milk_production ~ age_at_calving_yrs, data = fm5_lactation_metrics)
 
 # Since the data violates all of the assumptions and is unbalanced, we'll use a Kruskal-Wallis test
 
-kruskal.test(total_milk_production ~ age_at_calving_yrs, data = lactation_metrics)
+kruskal.test(total_milk_production ~ age_at_calving_yrs, data = fm5_lactation_metrics)
 
 # View differences
-ggplot(lactation_metrics, aes(x=age_at_calving_yrs, y = total_milk_production)) +
+ggplot(fm5_lactation_metrics, aes(x=age_at_calving_yrs, y = total_milk_production)) +
   geom_boxplot() +
   labs(title = "Milk Production Across Age Groups",
        x = "Age at Calving",
@@ -87,7 +87,7 @@ ggplot(lactation_metrics, aes(x=age_at_calving_yrs, y = total_milk_production)) 
   )
 
 # Dunn's posthoc test
-df <- lactation_metrics %>%
+df <- fm5_lactation_metrics %>%
   filter(!is.na(age_at_calving_yrs)) %>%
   mutate(age_at_calving_yrs = factor(age_at_calving_yrs))
 
@@ -101,18 +101,18 @@ df %>%
 # --- Examining effect of lactation duration. ---
 # Hypothesis: longer lactation intervals produce higher milk yields
 
-lm_lac_dur <- lm(total_milk_production ~ lactation_duration, data = lactation_metrics)
+lm_lac_dur <- lm(total_milk_production ~ lactation_duration, data = fm5_lactation_metrics)
 
 summary(lm_lac_dur)
 
-lactation_metrics <- lactation_metrics %>%
+fm5_lactation_metrics <- fm5_lactation_metrics %>%
   mutate(
     fitted_values = fitted(lm_lac_dur),
     residuals = resid(lm_lac_dur)
   )
 
 # Plot lactation duration against residuals
-ggplot(lactation_metrics, aes(x = lactation_duration, y = residuals)) +
+ggplot(fm5_lactation_metrics, aes(x = lactation_duration, y = residuals)) +
   geom_point(alpha = 0.6, color = "steelblue") +
   geom_hline(yintercept = 0, linetype = "dashed", color = "black") +
   geom_smooth(method = "loess", se = FALSE, color = "red") +
@@ -129,7 +129,7 @@ ggplot(lactation_metrics, aes(x = lactation_duration, y = residuals)) +
   )
 
 # Plot fitted against residuals
-ggplot(lactation_metrics, aes(x = fitted_values, y = residuals)) +
+ggplot(fm5_lactation_metrics, aes(x = fitted_values, y = residuals)) +
   geom_point(alpha = 0.6, color = "darkgreen") +
   geom_hline(yintercept = 0, linetype = "dashed") +
   geom_smooth(method = "loess", se = FALSE, color = "red") +
@@ -150,7 +150,7 @@ ggplot(lactation_metrics, aes(x = fitted_values, y = residuals)) +
 # Academic debate centers on whether shorter (30-45 days) vs longer (>60 days) optimize the next lactation yield and cow health.
 
 # Join each lactation's dry-off interval with the subsequent lactation
-df <- lactation_metrics %>%
+df <- fm5_lactation_metrics %>%
   arrange(AniLifeNumber, RemLactation_LacNumber) %>%
   group_by(AniLifeNumber) %>%
   mutate(next_yield = lead(total_milk_production)) %>%
@@ -161,7 +161,7 @@ df <- lactation_metrics %>%
 cor.test(df$dry_off_interval, df$next_yield, method = "spearman")
 
 
-df <- lactation_metrics %>%
+df <- fm5_lactation_metrics %>%
   arrange(AniLifeNumber, RemLactation_LacNumber) %>%
   group_by(AniLifeNumber) %>%
   mutate(
@@ -244,7 +244,7 @@ pwr.anova.test(
 )
 
 # Adjusting dry-off interval bins to increase statistical power
-df2 <- lactation_metrics %>%
+df2 <- fm5_lactation_metrics %>%
   arrange(AniLifeNumber, RemLactation_LacNumber) %>%
   group_by(AniLifeNumber) %>%
   mutate(
@@ -327,7 +327,7 @@ pwr.anova.test(
 
 
 # --- Interval between calving and artificial insemination ---
-df3 <- lactation_metrics %>%
+df3 <- fm5_lactation_metrics %>%
   filter(!is.na(calving_to_insem_days)) # drop NAs
 
 # Spearman correlation (robust to non-normality)
@@ -365,7 +365,7 @@ ggplot(df3_aug, aes(x = calving_to_insem_days, y = total_milk_production)) +
   theme_classic()
 
 # --- Calving interval ---
-df_ci <- lactation_metrics %>%
+df_ci <- fm5_lactation_metrics %>%
   filter(!is.na(calving_interval_days)) # Remove NAs
 
 # plot total milk vs calving interval

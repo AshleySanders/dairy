@@ -169,12 +169,19 @@ sum(is.na(fm5_lactation_summary$AniBirthday))
 # --- Calculate age at calving for each lactation cycle ------------------------
 assign(paste0(farm_prefix, "_age_at_calving"),
        get(paste0(farm_prefix, "_lactation_summary")) %>%
-         filter(RemLactation_LacNumber > 0, !is.na(AniBirthday), !is.na(LacCalvingDate), !is.na(LacId)) %>%
+         filter(RemLactation_LacNumber > 0, !is.na(AniBirthday), !is.na(LacCalvingDate)) %>%
          mutate(age_at_calving = interval(AniBirthday, LacCalvingDate) %/% months(1)) %>%
          select(AniLifeNumber, LacId, age_at_calving) %>%
          group_by(AniLifeNumber, LacId) %>%
          summarise(age_at_calving = first(age_at_calving), .groups = "drop")
 )
+
+fm5_age_at_calving <- fm5_lactation_summary %>%
+  filter(RemLactation_LacNumber > 0, !is.na(AniBirthday), !is.na(LacCalvingDate)) %>%
+  mutate(age_at_calving = interval(AniBirthday, LacCalvingDate) %/% months(1)) %>%
+  select(AniLifeNumber, LacId, age_at_calving) %>%
+  group_by(AniLifeNumber, LacId) %>%
+  summarise(age_at_calving = first(age_at_calving), .groups = "drop")
 
 assign(paste0(farm_prefix, "_lactation_metrics"),
        get(paste0(farm_prefix, "_lactation_summary")) %>%

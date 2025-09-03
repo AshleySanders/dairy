@@ -60,3 +60,17 @@ df_filled <- df_filled %>%
       TRUE ~ AniMotherLifeNumber
     )
   )
+
+# Fix birth_year in fm5_cow_features
+fm5_cow_features <- fm5_cow_features %>%
+  mutate(
+    birth_year = case_when(
+      AniLifeNumber == "FR4404288379" ~ as.numeric("2019"),
+      TRUE ~ birth_year
+    )
+  )
+
+# Remove nonexistent cow from lactation_metrics. She is nowhere in fm5_animals or Pilot'Elevage
+
+fm5_lactation_metrics <- fm5_lactation_metrics %>%
+  filter(AniLifeNumber != "FR4404288379")
