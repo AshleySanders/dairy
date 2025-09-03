@@ -1,3 +1,20 @@
+# Fix the missing country codes in AniLifeNumber in fm5_lactation_ummary => fm5_lactation_metrics
+
+fm5_lactation_summary <- fm5_lactation_summary %>%
+  mutate(
+    AniLifeNumber = case_when(
+      AniId == "311" ~ "FR4401572220",
+      AniId == "445" ~ "FR4401572271",
+      AniId == "531" ~ "FR4401572306",
+      AniId == "685" ~ "FR4401572356",
+      AniId == "698" ~ "FR4401572362",
+      AniId == "705" ~ "FR4401572364",
+      AniId == "721" ~ "FR4401572370",
+      TRUE ~ AniLifeNumber
+    )
+  )
+
+#----------------------------------------------------------------------------------------
 # 12 rows in lactation metrics still didn't have cow birth dates (AniBirthday)
 # Identify the missing cows and look for other identifying information that could be used to look them up in another table
 

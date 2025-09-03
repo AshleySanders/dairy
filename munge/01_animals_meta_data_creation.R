@@ -103,6 +103,27 @@ fm5_dairy_meta <- fm5_dairy_history %>%
     entry_code = if_else(is.na(entry_code) & AniMotherLifeNumber %in% herd_ids, "N", entry_code),
     entry_date = if_else(!is.na(entry_date), entry_date,
                          if_else(entry_code == "N", AniBirthday, as.Date(NA)))
+  ) %>%
+  select(-c(category, month, year, AniActive))
+
+# Join fmX_dairy_meta with slaughter data
+fm5_dairy_meta <- fm5_dairy_meta %>%
+  left_join(fm5_animals_slaughter, by = "national_number")
+
+# Double check entry and slaughter dates
+exit_date_check <- fm5_dairy_meta %>%
+  select(c(national_number, exit_date, slaughter_date)) %>%
+  mutate(
+    exit_check = interval(as.Date(slaughter_date), as.Date(exit_date)) %/% days(1))
+
+View(exit_date_check)
+
+# If necessary update exit_date and exit_code.
+
+fm5_dairy_meta <- fm5_dairy_meta %>%
+  mutate(
+    exit_code = if_else(is.na(exit_code) & !is.na(slaughter_date), "B", exit_code),
+    exit_date = if_else(is.na(exit_date) & !is.na(slaughter_date), as.Date(slaughter_date), exit_date)
   )
 
 

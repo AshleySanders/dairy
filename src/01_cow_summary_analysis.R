@@ -3,25 +3,16 @@ library(rstatix)
 library(ggpubr)
 
 # 1. purchased or raised on the farm ?
-table(cow_features$entry_code)
+table(fm5_cow_features$entry_code)
 
-View(cow_features %>%
+View(fm5_cow_features %>%
        filter(is.na(entry_code)))
 
 # 2. Distribution + mean of age at first calving
-summary(cow_features$age_at_first_calving)
-hist(cow_features$age_at_first_calving,
-     main = "Cow's Age at First Calving",
-     xlab = "Age (months)",
-     ylab = "Number of Cows")
-boxplot(cow_features$age_at_first_calving)
-
-cow_features %>% identify_outliers(age_at_first_calving) %>% select(c(AniBirthday, age_at_first_calving)) %>% print(n=75)
-
 # Remove outliers before calculating the summary stats for age at first calving
 
-valid_calving <- cow_features %>%
-  filter(cohort != "pre-2016",
+valid_calving <- fm5_cow_features %>%
+  filter(birth_year > 2012,
          entry_code != "A",
          !is.na(AniLifeNumber),
          AniLifeNumber != "")
@@ -34,10 +25,10 @@ hist(valid_calving$age_at_first_calving,
      ylab = "Number of Cows")
 
 # Examine distribution & outliers of cow's age at first insemination (according to Lely)
-first_insem_outliers <- cow_features %>% identify_outliers(age_at_first_insem) %>%
+first_insem_outliers <- fm5_cow_features %>% identify_outliers(age_at_first_insem) %>%
   select(AniLifeNumber, AniBirthday, cohort, age_at_first_insem, age_at_first_calving, entry_code)
 
-View(first_insem_outliers %>% filter(cohort != "pre-2016"))
+View(first_insem_outliers)
 
 summary(valid_calving$age_at_first_insem)
 
@@ -79,29 +70,59 @@ ggplot(valid_insem, aes(x = age_first_successful_insem, y = age_at_first_calving
 
 
 # 3. Number of inseminations needed per lactation cycle
-summary(cow_features$avg_insem)
-boxplot(cow_features$avg_insem, horizontal = TRUE,
+summary(fm5_cow_features$avg_insem)
+boxplot(fm5_cow_features$avg_insem, horizontal = TRUE,
         main = "Average number of artificial inseminations per cycle per cow")
-hist(cow_features$avg_insem,
+hist(fm5_cow_features$avg_insem,
      main = "Average number of artificial inseminations per cycle per cow",
      xlab = "Average # of AIs",
      ylab = "Number of Cows")
 
+# 3b. Average number of inseminations versus total number of lactation cycles
+ggplot(data = fm5_cow_features, aes(x = number_lactations, y = avg_insem)) +
+  geom_point(alpha = 0.4, color = "red", size = 1.4) +
+  scale_x_continuous(breaks = 1:10, limits = c(1, 10)) +
+  scale_y_continuous(breaks = 1:10, limits = c(1, 10)) +
+  labs(
+    title = "Marais: Average # of Inseminations by Total # of Lactations",
+    x = "Number of lactations",
+    y = "Average inseminations") +
+  theme_classic()
+
+avg_insem_by_total_lac <- table(fm5_cow_features$number_lactations, fm5_cow_features$avg_insem)
+
+fisher.test(avg_insem_by_total_lac, simulate.p.value = TRUE)
+
+# 3c. Number of inseminations per cow per lactation cycle
+ggplot(data = lactation_metrics, aes(x = RemLactation_LacNumber, y = n_insem)) +
+  geom_point(alpha = 0.4, color = "darkgreen", size = 1.4) +
+  scale_x_continuous(breaks = 1:10, limits = c(1,10)) +
+  scale_y_continuous(breaks = 1:10, limits = c(1,10)) +
+  labs(
+    title = "Marais: Number of Inseminations per Cow per Lactation",
+    x = "Lactation Number",
+    y = "Number of Inseminations per Cycle") +
+  theme_classic()
+
+n_insem_by_lacNumber <- table(fm5_lactation_metrics$n_insem, fm5_lactation_metrics$RemLactation_LacNumber)
+
+fisher.test(n_insem_by_lacNumber, simulate.p.value = TRUE)
+
 # 4. Number of milking cycles per cow
-summary(cow_features$number_lactations)
-hist(cow_features$number_lactations,
+summary(fm5_cow_features$number_lactations)
+hist(fm5_cow_features$number_lactations,
      main = "Number of Lactation Cycles per Cow",
      xlab = "Number of Lactations",
      ylab = "Number of Cows")
 
 
 # 5. Dry-off interval
-summary(cow_features$avg_dry_interval)
-boxplot(cow_features$avg_dry_interval, horizontal = TRUE,
+summary(fm5_cow_features$avg_dry_interval)
+boxplot(fm5_cow_features$avg_dry_interval, horizontal = TRUE,
         main = "Average Dry-Off Intervals by Cow",
         xlab= "Number of Days")
 
-valid_dry_off <- lactation_metrics %>%
+valid_dry_off <- fm5_lactation_metrics %>%
   filter(
     !is.na(dry_off_interval),
     AniLifeNumber != ""
@@ -119,19 +140,19 @@ ggplot(valid_dry_off, aes(x = lactation_duration, y = dry_off_interval)) +
 
 
 # Missing Data Analysis
-na_dry_off <- lactation_metrics %>%
+na_dry_off <- fm5_lactation_metrics %>%
   filter(is.na(dry_off_interval),
          still_milking == FALSE,
          last_lactation == FALSE,
          AniLifeNumber != "")
 
 # Outlier Identification
-cow_features %>% identify_outliers(avg_dry_interval) %>%
+fm5_cow_features %>% identify_outliers(avg_dry_interval) %>%
   select(c(AniBirthday, avg_dry_interval)) %>%
   print(n=28)
 
 # Outlier Analysis
-dry_off_outliers <- lactation_metrics %>% identify_outliers(dry_off_interval)
+dry_off_outliers <- fm5_lactation_metrics %>% identify_outliers(dry_off_interval)
 nrow(dry_off_outliers)
 
 View(dry_off_outliers)
@@ -150,9 +171,9 @@ fisher.test(insem_preg_fail, simulate.p.value = TRUE)
 
 # interval between successful insemination & dry-off date
 # For each cycle (InsLacId), get the first successful AI date
-ins_per_cycle <- insem_lac_preg %>%
+ins_per_cycle <- fm5_insem_lac_preg %>%
   filter(successful_insem, successful_pregnancy) %>%
-  group_by(AniLifeNumber, InsLacId, CalculatedLactationCycle) %>%
+  group_by(AniLifeNumber, LacId, CalculatedLactationCycle) %>%
   summarise(
     first_success = min(as.Date(InsDate)),
     .groups = "drop"
@@ -165,14 +186,14 @@ cycle_ins_match <- ins_per_cycle %>%
   )
 
 # Join to your lactation_metrics and compute the intervals
-lactation_with_intervals <- lactation_metrics %>%
+lactation_with_intervals <- fm5_lactation_metrics %>%
   mutate(
     LacCalvingDate = as.Date(LacCalvingDate),
     dry_off_date   = as.Date(dry_off_date)
   ) %>%
   left_join(
     cycle_ins_match,
-    by = c("AniLifeNumber", "CalculatedLactationCycle")
+    by = c("AniLifeNumber", "CalculatedLactationCycle"), relationship = "many-to-many"
   ) %>%
   mutate(
     # Days from the AI (in cycle N) to the calving that starts cycle N+1
@@ -196,47 +217,44 @@ summary(lactation_with_intervals$insem_to_dryoff)
 boxplot(lactation_with_intervals$insem_to_dryoff, horizontal = TRUE, main = "Interval Between Successful AI to Dry-Off")
 
 # 6. Fattening or immediate sale to abattoir?
-summary(cow_features$endmilk_to_exit_days)
-ggplot(data = cow_features, aes(x=exit_date, y=endmilk_to_exit_days)) +
+summary(fm5_cow_features$endmilk_to_exit_days)
+ggplot(data = fm5_cow_features, aes(x=exit_date, y=endmilk_to_exit_days)) +
   geom_point(aes(color = "red")) +
   labs(title = "Number of Days Between the Last Milking and Exit",
        x = "Exit Date",
        y = "Number of Days") +
-  theme_bw() +
-  theme(
-    panel.grid.major = element_blank(),
-    panel.grid.minor = element_blank(),
-    panel.background = element_blank(),
-    axis.line = element_line(colour = "dark grey")
-  )
-boxplot(cow_features$endmilk_to_exit_days, horizontal = TRUE,
+  theme_classic()
+
+boxplot(fm5_cow_features$endmilk_to_exit_days, horizontal = TRUE,
         main = "Number of Days Between the Last Milking and Exit")
 
-cow_features %>% identify_outliers(endmilk_to_exit_days) %>%
+fm5_cow_features %>% identify_outliers(endmilk_to_exit_days) %>%
   select(c(AniLifeNumber, AniBirthday, exit_date, endmilk_to_exit_days))
 
 # Examine a possible change in Farm 1's strategy in mid-2024
 
-cow_features_2024 <- cow_features %>%
-  filter(exit_date > as.Date("2024-01-01"))
+# fm1_cow_features_2024 <- fm5_cow_features %>%
+#   filter(exit_date > as.Date("2024-01-01"))
+#
+# ggplot(data = fm1_cow_features_2024, aes(x = exit_date, y = endmilk_to_exit_days)) +
+#   geom_point(alpha = 0.6, size = 3, color = "steelblue") +
+#   geom_smooth(method = "gam") +
+#   labs(title = "Number of Days Between the Last Milking and Exit in 2024",
+#        x = "Exit Date",
+#        y = "Number of Days") +
+#   theme_classic()
 
-ggplot(data = cow_features_2024, aes(x = exit_date, y = endmilk_to_exit_days)) +
-  geom_point(alpha = 0.6, size = 3, color = "steelblue") +
-  geom_smooth(method = "gam") +
-  labs(title = "Number of Days Between the Last Milking and Exit in 2024",
-       x = "Exit Date",
-       y = "Number of Days") +
-  theme_classic()
+#-------------------------------------------------------------------------------
 
 # Doublecheck and verify exit dates with slaughter dates.
-exit_date_check <- cow_features %>%
+exit_date_check <- fm5_cow_features %>%
+  select(c(AniLifeNumber, exit_date, slaughter_date)) %>%
   mutate(
-    exit_check = interval(as.Date(slaughter_date), as.Date(exit_date)) %/% days(1)
-  )
+    exit_check = interval(as.Date(slaughter_date), as.Date(exit_date)) %/% days(1))
 
 # 7. Average number of days in each cow’s lactation cycle over the lifetime of the cow
-summary(cow_features$avg_lactation_duration)
-boxplot(cow_features$avg_lactation_duration, horizontal = TRUE,
+summary(fm5_cow_features$avg_lactation_duration)
+boxplot(fm5_cow_features$avg_lactation_duration, horizontal = TRUE,
         main = "Average Lactation Duration",
         xlab = "Number of Days")
 
@@ -254,7 +272,7 @@ lactation_metrics %>%
   summary()
 
 # Examine potential trends over time.
-ggplot(cow_features, aes(x=AniBirthday, y = avg_lactation_duration)) +
+ggplot(fm5_cow_features, aes(x=AniBirthday, y = avg_lactation_duration)) +
   geom_point() +
   geom_smooth(method = "lm") +
   labs(title = "Cow's Average Lactation Duration by Birth Year",
@@ -268,7 +286,7 @@ ggplot(cow_features, aes(x=AniBirthday, y = avg_lactation_duration)) +
     axis.line = element_line(colour = "black")
   )
 
-ggplot(cow_features, aes(x=exit_date, y = avg_lactation_duration)) +
+ggplot(fm5_cow_features, aes(x=exit_date, y = avg_lactation_duration)) +
   geom_point() +
   geom_smooth(method = "lm") +
   labs(title = "Cow's Average Lactation Duration Over Time",
@@ -317,9 +335,9 @@ ggplot(lactation_metrics, aes(x = last_lactation, y = lactation_duration)) +
 hist(lactation_metrics$age_at_calving)
 
 # 8. Compare the younger cows' shorter lactation duration (above) with trends in milk production
-summary(cow_features$avg_total_milk) # all cows
+summary(fm5_cow_features$avg_total_milk) # all cows
 
-ggplot(cow_features, aes(x=AniBirthday, y = avg_total_milk)) +
+ggplot(fm5_cow_features, aes(x=AniBirthday, y = avg_total_milk)) +
   geom_point() +
   labs(title = "Milk Production",
        x = "Birthdate",
@@ -333,7 +351,7 @@ ggplot(cow_features, aes(x=AniBirthday, y = avg_total_milk)) +
   )
 
 # Milk production over time
-ggplot(cow_features, aes(x=exit_date, y = avg_total_milk)) +
+ggplot(fm5_cow_features, aes(x=exit_date, y = avg_total_milk)) +
   geom_point() +
   geom_smooth(method = "lm") +
   labs(title = "Milk Production Over Time",
@@ -348,34 +366,34 @@ ggplot(cow_features, aes(x=exit_date, y = avg_total_milk)) +
   )
 
 # 9. Milk production summary
-summary(cow_features$avg_total_milk)
+summary(fm5_cow_features$avg_total_milk)
 
-boxplot(cow_features$avg_total_milk, horizontal = TRUE,
+boxplot(fm5_cow_features$avg_total_milk, horizontal = TRUE,
         xlab = "Average Milk Production per Cow per Lactation (L)")
 
 # 10. Lifespan of Cows
-summary(cow_features$age_at_exit)
-hist(cow_features$age_at_exit,
+summary(fm5_cow_features$age_at_exit)
+hist(fm5_cow_features$age_at_exit,
      main = "Cows' Age at Exit",
      xlab = "Age (Months)",
      ylab = "Number of Cows")
 
 # 11. Calving to Insemination
-summary(cow_features$avg_calving_to_insem)
+summary(fm5_cow_features$avg_calving_to_insem)
 
 # Visually examine the distribution - histogram
-hist(cow_features$avg_calving_to_insem,
+hist(fm5_cow_features$avg_calving_to_insem,
      main = "Average Time Between Calving & the Next AI",
      xlab = "Days",
      ylab = "Number of Cows")
 
 # Boxplot of the distribution, which indicates outliers
-boxplot(cow_features$avg_calving_to_insem, horizontal = TRUE,
+boxplot(fm5_cow_features$avg_calving_to_insem, horizontal = TRUE,
         main = "Average Time Between Calving & the Next AI",
         xlab = "Number of Days")
 
 # View outliers
-cow_features %>% identify_outliers(avg_calving_to_insem) %>%
+fm5_cow_features %>% identify_outliers(avg_calving_to_insem) %>%
   select(c(AniLifeNumber, avg_calving_to_insem, avg_insem, insem_success_ratio)) %>% print(n = 18)
 
 # Return to lactation cycle metrics to explore anomalies
@@ -443,27 +461,27 @@ boxplot(lactation_metrics$calving_interval_days, horizontal = TRUE,
 # 13. The script for the milk yield analysis is available in 02_single_variable_milk_yield_analysis.R
 
 # 14. Health Problem Analysis
-405 - sum(is.na(cow_features$n_health_problems))
+405 - sum(is.na(fm5_cow_features$n_health_problems))
 
-summary(cow_features$n_health_problems)
+summary(fm5_cow_features$n_health_problems)
 
-boxplot(cow_features$n_health_problems, horizontal = TRUE,
+boxplot(fm5_cow_features$n_health_problems, horizontal = TRUE,
         main = "Number of Health Problems")
 
-summary(cow_features$recovery_duration)
-boxplot(cow_features$recovery_duration, horizontal = TRUE,
+summary(fm5_cow_features$recovery_duration)
+boxplot(fm5_cow_features$recovery_duration, horizontal = TRUE,
         main = "Total Number of Days Required for Recovery")
 
-cow_features <- cow_features %>%
+fm5_cow_features <- fm5_cow_features %>%
   mutate(
     diagnosis_to_exit = interval(as.Date(date_last_diagnosis), as.Date(exit_date)) %/% days(1)
   )
 
-summary(cow_features$diagnosis_to_exit)
+summary(fm5_cow_features$diagnosis_to_exit)
 
 # Simplify last diagnosis
 
-cow_features <- cow_features %>%
+fm5_cow_features <- fm5_cow_features %>%
   mutate(
     simplified_last_diagnosis = case_when(
 
@@ -504,9 +522,9 @@ cow_features <- cow_features %>%
     )
   )
 
-last_diagnosis <- table(cow_features$simplified_last_diagnosis)
+last_diagnosis <- table(fm5_cow_features$simplified_last_diagnosis)
 
-cow_features %>%
+fm5_cow_features %>%
   na.omit(cols = "simplified_diagnosis") %>%   # drop NA diagnoses
   # count cows by simplified diagnosis
   count(simplified_last_diagnosis, name = "n") %>%

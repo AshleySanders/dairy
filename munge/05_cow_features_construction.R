@@ -41,8 +41,7 @@ source(here::here("lib", "helpers.R"))
 lm   <- get(paste0(farm_prefix, "_lactation_metrics"))
 ilp  <- get(paste0(farm_prefix, "_insem_lac_preg"))
 chs  <- get(paste0(farm_prefix, "_cow_health_summary"))
-dmet <- get(paste0(farm_prefix, "_dairy_meta"))
-asl  <- get(paste0(farm_prefix, "_animals_slaughter"))
+dmet <- get(paste0(farm_prefix, "_dairy_meta")) # now contains slaughter details
 
 # animals_slaughter uses 'national_number', align the key name here:
 if (!"AniLifeNumber" %in% names(asl) && "national_number" %in% names(asl)) {
@@ -133,7 +132,7 @@ cow_age_at_first_insem <- ilp %>%
   dplyr::slice(1) %>%
   dplyr::ungroup() %>%
   dplyr::mutate(
-    age_at_first_insem = interval(as.Date(AniBirthday), as.Date(InsDate)) %/% months(1),
+    age_at_first_insem = (interval(as.Date(AniBirthday), as.Date(InsDate)) %/% months(1)) - 12,
     first_insem_date   = InsDate
   ) %>%
   dplyr::select(AniLifeNumber, age_at_first_insem, InsDate) %>%
@@ -146,7 +145,7 @@ cow_age_first_success_insem <- ilp %>%
   dplyr::slice(1) %>%
   dplyr::ungroup() %>%
   dplyr::mutate(
-    age_first_successful_insem = interval(AniBirthday, InsDate) %/% months(1)
+    age_first_successful_insem = (interval(AniBirthday, InsDate) %/% months(1)) - 12
   ) %>%
   dplyr::select(AniLifeNumber, age_first_successful_insem) %>%
   dplyr::filter(AniLifeNumber %in% valid_cow_ids)
@@ -155,7 +154,7 @@ cow_age_first_success_insem <- ilp %>%
 #- -- Join everything into cow_features ----------------------------------------
 farm_cow_features <- cow_lactation_summary %>%
   dplyr::left_join(
-    dmet %>% dplyr::select(-c(AniId, AniGenId, AniBirthday, AniActive, AniMotherLifeNumber, date, customer_id)),
+    dmet %>% dplyr::select(-c(AniId, AniBirthday, AniMotherLifeNumber, date, customer_id)),
     by = c("AniLifeNumber" = "national_number")
   ) %>%
   dplyr::left_join(exit_age,                        by = "AniLifeNumber") %>%
@@ -164,7 +163,6 @@ farm_cow_features <- cow_lactation_summary %>%
   dplyr::left_join(cow_age_at_first_insem,          by = "AniLifeNumber") %>%
   dplyr::left_join(cow_age_first_success_insem,     by = "AniLifeNumber") %>%
   dplyr::left_join(chs,                             by = "AniLifeNumber") %>%
-  dplyr::left_join(asl,                             by = "AniLifeNumber") %>%
   dplyr::mutate(
     n_health_problems = tidyr::replace_na(n_health_problems, 0),
     recovery_duration = tidyr::replace_na(recovery_duration, 0)
@@ -202,6 +200,8 @@ if (!is.null(existing_cf) && !"farm" %in% names(existing_cf)) {
   # If this table is known to be fm1, label it as such
   existing_cf <- dplyr::mutate(existing_cf, farm = "farm1")
 }
+
+
 
 # Bind + keep consistent column order (dplyr will pad missing columns with NA)
 combined_cf <- if (is.null(existing_cf)) {

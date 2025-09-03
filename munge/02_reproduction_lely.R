@@ -25,7 +25,7 @@
 #
 # Author:         Ashley Sanders
 # Created:        2025-06-19
-# Last Updated:   2025-08-21
+# Last Updated:   2025-08-29
 # ------------------------------------------------------------------------------
 
 
@@ -36,7 +36,23 @@ source(here::here("lib", "helpers.R"))
 # Load lactation metrics
 assign(paste0(farm_prefix, "_lactation_summary_all"), read.csv(here("data", "fm5_lactation_cycles_milk_metrics.csv")))
 
+#-------------------------------------------------------------------------------
+# Run the first part of lib/05_farm5_fix_missing_birthdays_lac_summary to fix AniLifeNumbers with missing country codes for farm5
+fm5_lactation_summary_all <- fm5_lactation_summary_all %>%
+  mutate(
+    AniLifeNumber = case_when(
+      AniId == "311" ~ "FR4401572220",
+      AniId == "445" ~ "FR4401572271",
+      AniId == "531" ~ "FR4401572306",
+      AniId == "685" ~ "FR4401572356",
+      AniId == "698" ~ "FR4401572362",
+      AniId == "705" ~ "FR4401572364",
+      AniId == "721" ~ "FR4401572370",
+      TRUE ~ AniLifeNumber
+    )
+  )
 
+#-------------------------------------------------------------------------------
 # Clean and prepare lactation summary
 assign(paste0(farm_prefix, "_lactation_summary"),
        get(paste0(farm_prefix, "_lactation_summary_all")) %>%

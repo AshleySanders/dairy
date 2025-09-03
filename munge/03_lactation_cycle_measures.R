@@ -2,7 +2,7 @@
 # Script Name: 03-lactation_metrics.R
 # Author: Ashley Sanders
 # Date Created: 2025-07-10
-# Last Updated: 2025-08-28
+# Last Updated: 2025-08-29
 # Project: Herd Management Strategy Analysis – Dairy Cow Lactation Cycle Metrics
 #
 # Description:
@@ -128,7 +128,31 @@ after_missing <- sum(is.na(df_filled$AniBirthday))
 message("Missing AniBirthday AFTER:  ", after_missing,
         " (filled: ", before_missing - after_missing, ")")
 
-# Run lib/05_farm5_fix_missing_birthdays_lac_summary.R to identify and replace the final missing birth dates
+# Run lib/05_farm5_fix_missing_birthdays_lac_summary.R to identify and replace the final missing birth dates:
+df_filled <- df_filled %>%
+  mutate(
+    AniLifeNumber = case_when(
+      AniId == "133" ~ "FR4404288196",
+      AniId == "274" ~ "FR4404288312",
+      AniId == "356" ~ "FR4404288379",
+      AniId == "459" ~ "FR4401541485",
+      TRUE ~ AniLifeNumber
+    ),
+    AniBirthday = case_when(
+      AniId == "133" ~ as.Date("2015-04-12"),
+      AniId == "274" ~ as.Date("2017-10-09"),
+      AniId == "356" ~ as.Date("019-01-31"),
+      AniId == "459" ~ as.Date("2017-09-12"),
+      TRUE ~ AniBirthday
+    ),
+    AniMotherLifeNumber = case_when(
+      AniId == "274" ~ "FR4404288101",
+      AniId == "356" ~ "FR4404288171",
+      AniId == "459" ~ "FR4401541370",
+      TRUE ~ AniMotherLifeNumber
+    )
+  )
+
 
 
 # --- Use df_filled to update farmX_lactation_summary table---------------------
