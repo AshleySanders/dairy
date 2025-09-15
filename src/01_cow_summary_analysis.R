@@ -1,3 +1,62 @@
+# ------------------------------------------------------------------------------
+# Script: 01_cow_summary_analysis.R
+# Purpose: Describe and quantify a “normal” cow life cycle on the farm and
+#          highlight deviations that affect reproduction, production, and exit.
+#
+# Scope / What this script does
+#   1) Entry source: purchased vs raised (entry_code); flag missing entries.
+#   2) Reproduction milestones:
+#        - Distribution of age at first AI & first calving (outliers, summaries).
+#        - Relationship between first AI (and first successful AI) and calving age.
+#   3) Insemination load:
+#        - Avg # of inseminations per cow/cycle; assoc. with # lactations.
+#   4) Lactation counts per cow (distribution).
+#   5) Dry-off intervals:
+#        - Distributions, outliers, relation to lactation duration.
+#        - Link successful AI → next cycle calving/dry-off intervals.
+#   6) Exit pathway:
+#        - Days from last milking to exit; identify long-delay cases.
+#   7) Average lactation duration: distribution, trends over time/age at calving.
+#   8) Milk production patterns over time and by birth cohort.
+#   9) Milk production summary & visuals.
+#  10) Lifespan at exit distribution.
+#  11) Calving → next AI interval: summaries, farm comparisons, outliers.
+#  12) Calving interval patterns and farm differences (bind multi-farm data).
+#  13) Pointer to single-variable milk yield analysis script.
+#  14) Health problems: counts, recovery times, diagnosis simplification & plots.
+#
+# Inputs (objects expected in the environment)
+#   - fm5_cow_features, fm5_lactation_metrics, lactation_metrics
+#   - fm5_insem_lac_preg
+#   - (optional) fm1_lactation_metrics for cross-farm comparisons
+#
+# Key Outputs (produced interactively / to console)
+#   - Summary tables (summary(), table(), fisher.test()) and multiple ggplots
+#   - Outlier data.frames (e.g., dry_off_outliers, fm5_lactation_outliers)
+#
+# Dependencies
+#   - Packages: rstatix, ggpubr, ggplot2, dplyr, tidyr, forcats, lubridate
+#   - Helper: clean_ani() if used upstream; assumes dates are Date class where needed
+#
+# Assumptions / Filters
+#   - Excludes cows with missing/blank AniLifeNumber where relevant.
+#   - Removes obvious outliers for certain summaries as noted in-line.
+#   - Uses simulate.p.value = TRUE for Fisher tests on larger tables.
+#
+# How to run
+#   - Ensure required objects are loaded (see Inputs).
+#   - Source this script after data prep steps that create *_cow_features and
+#     *_lactation_metrics.
+#
+# Repro tips
+#   - Set a seed for any resampling:
+#       set.seed(123)
+#   - Capture session info when exporting results:
+#       sessionInfo()
+#
+# ------------------------------------------------------------------------------
+
+
 # --- Defining a "normal" cow life cycle on the farm. ---
 library(rstatix)
 library(ggpubr)
@@ -185,7 +244,7 @@ cycle_ins_match <- ins_per_cycle %>%
     CalculatedLactationCycle = CalculatedLactationCycle + 1L
   )
 
-# Join to your lactation_metrics and compute the intervals
+# Join to lactation_metrics and compute the intervals
 lactation_with_intervals <- fm5_lactation_metrics %>%
   mutate(
     LacCalvingDate = as.Date(LacCalvingDate),
@@ -555,8 +614,3 @@ fm5_cow_features %>%
     title = "Last Diagnosis"
   ) +
   theme_classic()
-
-
-
-
-

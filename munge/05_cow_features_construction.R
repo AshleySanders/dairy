@@ -1,5 +1,5 @@
 # -----------------------------------------------------------------------------
-# Script Name: 06_cow_features_build_and_combine.R
+# Script Name: 05_cow_features_build_and_combine.R
 # Author: Ashley Sanders
 # Date Created: 2025-08-28
 # Last Updated: 2025-08-28
@@ -200,7 +200,6 @@ if (!is.null(existing_cf) && !"farm" %in% names(existing_cf)) {
   # If this table is known to be fm1, label it as such
   existing_cf <- dplyr::mutate(existing_cf, farm = "farm1")
 }
-
 
 
 # Bind + keep consistent column order (dplyr will pad missing columns with NA)

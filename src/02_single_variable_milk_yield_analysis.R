@@ -10,6 +10,7 @@ library(FSA)
 library(rstatix)
 library(splines)
 library(pwr)
+library(RVAideMemoire)
 
 # --- Age at Calving ---
 # Split ages of cows into groups
@@ -69,7 +70,7 @@ shapiro.test(residuals(fit))
 # Homogeneity of variance
 leveneTest(total_milk_production ~ age_at_calving_yrs, data = fm5_lactation_metrics)
 
-# Since the data violates all of the assumptions and is unbalanced, we'll use a Kruskal-Wallis test
+# If the data violates the assumptions and is unbalanced, use a Kruskal-Wallis test
 
 kruskal.test(total_milk_production ~ age_at_calving_yrs, data = fm5_lactation_metrics)
 
@@ -79,12 +80,7 @@ ggplot(fm5_lactation_metrics, aes(x=age_at_calving_yrs, y = total_milk_productio
   labs(title = "Milk Production Across Age Groups",
        x = "Age at Calving",
        y = "Total Milk Production (L)") +
-  theme_classic() +
-  theme(
-    panel.background = element_blank(),
-    panel.grid.major = element_blank(),
-    panel.grid.minor = element_blank()
-  )
+  theme_classic()
 
 # Dunn's posthoc test
 df <- fm5_lactation_metrics %>%
@@ -105,6 +101,16 @@ lm_lac_dur <- lm(total_milk_production ~ lactation_duration, data = fm5_lactatio
 
 summary(lm_lac_dur)
 
+ggplot(fm5_lactation_metrics, aes(x = lactation_duration, y = total_milk_production)) +
+  geom_point(alpha = 0.6, color = "darkgreen", size = 1.4) +
+  geom_smooth(method = "lm") +
+  labs(
+    title = "Milk Production as a function of Lactation Duration",
+    x = "Lactation Duration (Days)",
+    y = "Total Milk Yield (L)"
+  ) +
+  theme_classic()
+
 fm5_lactation_metrics <- fm5_lactation_metrics %>%
   mutate(
     fitted_values = fitted(lm_lac_dur),
@@ -120,13 +126,7 @@ ggplot(fm5_lactation_metrics, aes(x = lactation_duration, y = residuals)) +
     title = "Residuals vs Lactation Duration",
     x = "Lactation Durations (days)",
     y = "Residual (Observed - Predicted Total Milk)") +
-  theme_classic() +
-  theme(
-    panel.background = element_blank(),
-    panel.grid.major = element_blank(),
-    panel.grid.minor = element_blank(),
-    axis.line = element_line("black")
-  )
+  theme_classic()
 
 # Plot fitted against residuals
 ggplot(fm5_lactation_metrics, aes(x = fitted_values, y = residuals)) +
@@ -138,19 +138,13 @@ ggplot(fm5_lactation_metrics, aes(x = fitted_values, y = residuals)) +
     x = "Fitted Total Milk Production",
     y = "Residual"
   ) +
-  theme_classic() +
-  theme(
-    panel.background = element_blank(),
-    panel.grid.major = element_blank(),
-    panel.grid.minor = element_blank(),
-    axis.line = element_line("black")
-  )
+  theme_classic()
 
 # --- Dry-off interval ---
 # Academic debate centers on whether shorter (30-45 days) vs longer (>60 days) optimize the next lactation yield and cow health.
 
 # Join each lactation's dry-off interval with the subsequent lactation
-df <- fm5_lactation_metrics %>%
+df <- combined_lactation_metrics %>%
   arrange(AniLifeNumber, RemLactation_LacNumber) %>%
   group_by(AniLifeNumber) %>%
   mutate(next_yield = lead(total_milk_production)) %>%
@@ -161,7 +155,7 @@ df <- fm5_lactation_metrics %>%
 cor.test(df$dry_off_interval, df$next_yield, method = "spearman")
 
 
-df <- fm5_lactation_metrics %>%
+df <- combined_lactation_metrics %>%
   arrange(AniLifeNumber, RemLactation_LacNumber) %>%
   group_by(AniLifeNumber) %>%
   mutate(
@@ -188,7 +182,10 @@ df <- fm5_lactation_metrics %>%
 
 ggplot(df, aes(x = dry_bin, y = next_yield)) +
   geom_boxplot() +
-  labs(x = "Dry Period Length", y = "Next Lactation Total Yield") +
+  labs(
+    title = "Effects of Dry-Off Interval on Milk Yield: Farms 1 and 5",
+    x = "Dry Period Length",
+    y = "Next Lactation Total Yield") +
   theme_classic()
 
 # Kurskall-Wallis Test to compare group means
@@ -199,9 +196,9 @@ df %>%
   dunn_test(next_yield ~ dry_bin, p.adjust.method = "bonferroni")
 
 # Fit a model
-fit2 <- lm(next_yield ~ bs(dry_off_interval, knots = c(45, 60, 75)) + age_at_calving + avg_daily_yield, data = df)
+fit3 <- lm(next_yield ~ bs(dry_off_interval, knots = (c(45, 60, 75))) + age_at_calving + avg_daily_yield, data = df)
 
-summary(fit2)
+summary(fit3)
 
 # --- Measure statistical power in dry-off interval analysis ---
 # Fit the ANOVA & pull out sums of squares
@@ -325,6 +322,53 @@ pwr.anova.test(
   power = 0.80
 )
 
+# --- Examine relationship between dry-off period length and pregnancy-related problems ---
+# Hypothesis: In a number of cases, the dry-off period may not be the farmer's choice but the result of insemination or pregnancy issues
+
+# Correlation between long dry-off interval & n_insem
+fisher.test(table(df$dry_bin, df$n_insem), simulate.p.value = TRUE)
+
+# Pairwise Fisher's test with p-value correction with preference for controlling the false discovery rate over correcting for family-wise error rate, so we'll use BH (Benjamin & Hochberg [1995], https://doi:10.1111/j.2517-6161.1995.tb02031.x )
+
+# Create a 2x2 matrix by first simplifying the variable classes
+df_sub <- df %>%
+  mutate(
+    long_dryoff = if_else(dry_bin == ">= 75d", ">= 75d", "< 75d"),
+    num_insem = if_else(n_insem > 1, ">1", "1"),
+    failed_pregs = case_when(
+      n_failed_pregnancies == 0 ~ "0",
+      n_failed_pregnancies == 1 ~ "1-2",
+      n_failed_pregnancies == 2 ~ "1-2",
+      n_failed_pregnancies > 2 ~ ">2"
+    )
+  )
+
+table(df_sub$num_insem, df_sub$dry_bin)
+
+# Create the matrix to test
+x_tab <- table(df_sub$long_dryoff, df_sub$num_insem)
+
+# Double check the significance with either a fisher's exact test or chi-square, depending on the expected values
+chisq.test(x_tab)
+
+chisq.posthoc.test(x_tab, method = "BH")
+
+table(df_sub$failed_pregs, df_sub$dry_bin)
+
+x_tab2 <- table(df_sub$long_dryoff, df_sub$failed_pregs)
+
+fisher.test(x_tab2, simulate.p.value = TRUE)
+
+pairwise_fisher_test(x_tab2, p.adjust.method = "BH")
+
+df_long_dry_only <- df_sub %>%
+  filter(long_dryoff == ">= 75d")
+
+x_tab3 <- table(df_long_dry_only$num_insem, df_long_dry_only$failed_pregs)
+
+fisher.test(x_tab3, simulate.p.value = TRUE)
+pairwise_fisher_test(x_tab3, p.adjust.method = "BH")
+chisq.posthoc.test(x_tab3)
 
 # --- Interval between calving and artificial insemination ---
 df3 <- fm5_lactation_metrics %>%

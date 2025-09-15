@@ -49,7 +49,7 @@
 #
 # Author:         Ashley Sanders
 # Created:        2025-08-06
-# Last Updated:   2025-08-08
+# Last Updated:   2025-09-04
 # ------------------------------------------------------------------------------
 library(forcats)
 library(survival)
@@ -63,62 +63,58 @@ library(parallel)
 
 # --- Feature Engineering ---
 # Create censoring flag and time-to-exit in days from birthdate
-cow_features <- cow_features %>%
+fm5_cow_features <- fm5_cow_features %>%
   mutate(
     censored = is.na(exit_date),
     time_to_exit_days = as.numeric(difftime(exit_date, AniBirthday, units = "days"))
   )
 
 # Standardize health problem data and create simplified diagnosis categories
-dairy_health_problems <- dairy_health_problems %>%
-  mutate(
-    AniLifeNumber = clean_ani(AniLifeNumber),
-    DiaDate = as.Date(DiaDate),
-    diagnosis_category = case_when(
-      grepl("mastitis", DisName, ignore.case = TRUE) ~ "mastitis",
-      grepl("fertil", DisName, ignore.case = TRUE) ~ "fertility",
-      grepl("cyst", DisName, ignore.case = TRUE) ~ "cyst",
-      grepl("lamen", DisName, ignore.case = TRUE) ~ "lameness",
-      TRUE ~ "other"
-    )
-  )
+# fm5_dairy_health_problems <- fm5_dairy_health_problems %>%
+#   mutate(
+#     AniLifeNumber = clean_ani(AniLifeNumber),
+#     DiaDate = as.Date(DiaDate),
+#     diagnosis_category = case_when(
+#       grepl("mastitis", DisName, ignore.case = TRUE) ~ "mastitis",
+#       grepl("fertil", DisName, ignore.case = TRUE) ~ "fertility",
+#       grepl("cyst", DisName, ignore.case = TRUE) ~ "cyst",
+#       grepl("lamen", DisName, ignore.case = TRUE) ~ "lameness",
+#       TRUE ~ "other"
+#     )
+#   )
 
 # Summarize health events per lactation cycle
-health_per_lactation <- dairy_health_problems %>%
-  inner_join(lactation_metrics %>%
-               select(AniLifeNumber, LacCalvingDate, dry_off_date, RemLactation_LacNumber),
-             by = "AniLifeNumber", relationship = "many-to-many") %>%
-  mutate(
-    DiaDate = as.Date(DiaDate),
-    LacCalvingDate = as.Date(LacCalvingDate),
-    dry_off_date = as.Date(dry_off_date)
-  ) %>%
-  filter(DiaDate >= LacCalvingDate & DiaDate <= dry_off_date) %>%
-  group_by(AniLifeNumber, RemLactation_LacNumber) %>%
-  summarise(
-    n_health_events = n(),
-    mastitis = any(diagnosis_category == "mastitis"),
-    fertility_issues = any(diagnosis_category == "fertility"),
-    lameness = any(diagnosis_category == "lameness"),
-    .groups = "drop"
-  )
+# health_per_lactation <- dairy_health_problems %>%
+#   inner_join(lactation_metrics %>%
+#                select(AniLifeNumber, LacCalvingDate, dry_off_date, RemLactation_LacNumber),
+#              by = "AniLifeNumber", relationship = "many-to-many") %>%
+#   mutate(
+#     DiaDate = as.Date(DiaDate),
+#     LacCalvingDate = as.Date(LacCalvingDate),
+#     dry_off_date = as.Date(dry_off_date)
+#   ) %>%
+#   filter(DiaDate >= LacCalvingDate & DiaDate <= dry_off_date) %>%
+#   group_by(AniLifeNumber, RemLactation_LacNumber) %>%
+#   summarise(
+#     n_health_events = n(),
+#     mastitis = any(diagnosis_category == "mastitis"),
+#     fertility_issues = any(diagnosis_category == "fertility"),
+#     lameness = any(diagnosis_category == "lameness"),
+#     .groups = "drop"
+#   )
 
 # Join data from lactation_metrics, cow_features, and health_per_lactation
-cow_survival <- lactation_metrics %>%
+fm5_cow_survival <- fm5_lactation_metrics %>%
   left_join(
-    cow_features %>%
+    fm5_cow_features %>%
       select(AniLifeNumber, age_at_exit, censored),
-    by = "AniLifeNumber"
-  ) %>%
-  left_join(
-    health_per_lactation, by = c("AniLifeNumber", "RemLactation_LacNumber")
-  ) %>%
-  mutate(across(c(mastitis, fertility_issues, lameness), ~replace_na(., FALSE)))
+    by = "AniLifeNumber", relationship = "many-to-many"
+  )
 
 # Fill in missing age_at_exit for censored cows using current date
-today <- as.Date("2025-08-06")  # or use Sys.Date()
+today <- as.Date("2025-09-04")  # or use Sys.Date()
 
-cow_survival <- cow_survival %>%
+fm5_cow_survival <- fm5_cow_survival %>%
   mutate(
     age_at_exit = ifelse(
       !is.na(exit_date),
@@ -128,36 +124,35 @@ cow_survival <- cow_survival %>%
   )
 
 # Check for missing values in predictor variables
-sapply(cow_survival[, c("total_milk_production", "n_insem",
+sapply(fm5_cow_survival[, c("total_milk_production", "n_insem",
                         "n_failed_pregnancies", "age_at_calving")],
        function(x) sum(is.na(x)))
 
 # Diagnose and explore rows with missing n_insem values
-sum(is.na(lactation_metrics$n_insem))
-missing_insem <- lactation_metrics %>% filter(is.na(n_insem))
-table(missing_insem$first_pregnancy)
-nrow(missing_insem %>% filter(first_pregnancy == FALSE, LacCalvingDate < as.Date("2017-10-01")))
-table(missing_insem$last_lactation)
+sum(is.na(fm5_lactation_metrics$n_insem))
+fm5_missing_insem <- fm5_lactation_metrics %>% filter(is.na(n_insem))
+table(fm5_missing_insem$first_pregnancy)
+nrow(fm5_missing_insem %>% filter(first_pregnancy == FALSE, LacCalvingDate < as.Date("2013-11-12")))
+table(fm5_missing_insem$last_lactation)
 
 # Impute NAs for n_insem using median value for modeling
-cow_survival <- cow_survival %>%
+fm5_cow_survival <- fm5_cow_survival %>%
   mutate(
     n_insem = coalesce(n_insem, median(n_insem, na.rm = TRUE))
   )
 
-
 # --- Fit random survival forest model ---
-cow_survival <- cow_survival %>%
+fm5_cow_survival <- fm5_cow_survival %>%
   mutate(insem_failed_interaction = n_insem * n_failed_pregnancies)
 
 # Create a survival object (event = 1 if the cow exited)
-surv_obj <- Surv(time = cow_survival$age_at_exit, event = cow_survival$censored == FALSE)
+surv_obj <- Surv(time = fm5_cow_survival$age_at_exit, event = fm5_cow_survival$censored == FALSE)
 
 # Fit RSF model with main predictors and one interaction term
 rsf_model <- ranger(
   formula = surv_obj ~ total_milk_production + n_insem + n_failed_pregnancies +
-    insem_failed_interaction + age_at_calving + mastitis + fertility_issues + lameness,
-  data = cow_survival,
+    insem_failed_interaction + age_at_calving,
+  data = fm5_cow_survival,
   mtry = 3,
   importance = "permutation",
   num.trees = 3000,
@@ -184,12 +179,7 @@ ggplot(var_imp_df, aes(x = reorder(Variable, Importance), y = Importance)) +
     x = "Predictor Variable",
     y = "Variable Importance (Permutation)"
   ) +
-  theme_classic(base_size = 12) +
-  theme(
-    plot.title = element_text(hjust = 0.5, face = "bold"),
-    axis.title.y = element_text(face = "bold"),
-    axis.title.x = element_text(face = "bold")
-  )
+  theme_classic(base_size = 12)
 
 
 # --- Validation with Kaplan-Meier Curves by Risk Group ---
@@ -199,28 +189,28 @@ rsf_surv_curves <- rsf_model$survival
 
 # Compute mean survival probability per cow across all timepoints, then risk score
 mean_survival <- rowMeans(rsf_surv_curves)
-cow_survival$risk_score <- 1 - mean_survival  # higher = more at risk
+fm5_cow_survival$risk_score <- 1 - mean_survival  # higher = more at risk
 
 # Assign quartile-based risk groups
-cow_survival_clean <- cow_survival %>%
+fm5_cow_survival_clean <- cow_survival %>%
   mutate(risk_group = ntile(risk_score, 4))  # quartiles
 
 # Join risk score and risk group to cow_features
-cow_features <- cow_features %>%
-  left_join(cow_survival_clean %>%
+fm5_cow_features <- fm5_cow_features %>%
+  left_join(fm5_cow_survival_clean %>%
               select(AniLifeNumber, risk_score, risk_group),
             by = "AniLifeNumber")
 
 # Fit Kaplan-Meier survival curves by RSF risk group
-km_fit <- survfit(Surv(age_at_exit, !censored) ~ risk_group, data = cow_survival_clean)
+km_fit <- survfit(Surv(age_at_exit, !censored) ~ risk_group, data = fm5_cow_survival_clean)
 
-ggsurvplot(km_fit, data = cow_survival_clean, pval = TRUE,
+ggsurvplot(km_fit, data = fm5_cow_survival_clean, pval = TRUE,
            risk.table = TRUE, palette = "Dark2",
            title = "Survival by RSF-predicted Risk Group")
 
 
 # --- Examine characteristics of each risk group ---
-cow_survival_clean %>%
+fm5_cow_survival_clean %>%
   group_by(risk_group) %>%
   summarise(
     n = n(),
@@ -236,51 +226,51 @@ cow_survival_clean %>%
 # --- Visualize key drivers by risk group ---
 
 # Boxplot for milk production by risk group
-ggplot(cow_survival_clean, aes(x = as.factor(risk_group), y = total_milk_production)) +
+ggplot(fm5_cow_survival_clean, aes(x = as.factor(risk_group), y = total_milk_production)) +
   geom_boxplot() +
   labs(title = "Milk Production by RSF Risk Group", x = "Risk Group", y = "Total Milk (L)") +
   theme_classic()
 
 # Barplot for prevalence of health issues by risk group
-cow_survival_clean %>%
-  group_by(risk_group) %>%
-  summarise(
-    mastitis = mean(mastitis),
-    fertility = mean(fertility_issues),
-    lameness = mean(lameness)
-  ) %>%
-  pivot_longer(cols = c(mastitis, fertility, lameness), names_to = "Issue", values_to = "Rate") %>%
-  ggplot(aes(x = as.factor(risk_group), y = Rate, fill = Issue)) +
-  geom_col(position = "dodge") +
-  labs(title = "Health Issue Rate by Risk Group", x = "Risk Group", y = "Proportion") +
-  theme_classic()
+# fm5_cow_survival_clean %>%
+#   group_by(risk_group) %>%
+#   summarise(
+#     mastitis = mean(mastitis),
+#     fertility = mean(fertility_issues),
+#     lameness = mean(lameness)
+#   ) %>%
+#   pivot_longer(cols = c(mastitis, fertility, lameness), names_to = "Issue", values_to = "Rate") %>%
+#   ggplot(aes(x = as.factor(risk_group), y = Rate, fill = Issue)) +
+#   geom_col(position = "dodge") +
+#   labs(title = "Health Issue Rate by Risk Group", x = "Risk Group", y = "Proportion") +
+#   theme_classic()
 
 
 # --- Map RSF risk scores back to management decisions ---
 
 # Profile high-risk cows (Group 4)
 
-cow_survival_clean %>%
+fm5_cow_survival_clean %>%
   filter(risk_group == 4) %>%
   summarise(
     avg_milk = mean(total_milk_production, na.rm = TRUE),
     avg_insem = mean(n_insem, na.rm = TRUE),
     avg_failed_preg = mean(n_failed_pregnancies, na.rm = TRUE),
-    pct_mastitis = mean(mastitis, na.rm = TRUE),
-    pct_lameness = mean(lameness, na.rm = TRUE),
-    avg_age_at_calving = mean(age_at_calving, na.rm = TRUE)
+    # pct_mastitis = mean(mastitis, na.rm = TRUE),
+    # pct_lameness = mean(lameness, na.rm = TRUE),
+    # avg_age_at_calving = mean(age_at_calving, na.rm = TRUE)
   )
 
 # Profile lowest-risk cows (Group 1)
-cow_survival_clean %>%
+fm5_cow_survival_clean %>%
   filter(risk_group == 1) %>%
   summarise(
     avg_milk = mean(total_milk_production, na.rm = TRUE),
     avg_insem = mean(n_insem, na.rm = TRUE),
     avg_failed_preg = mean(n_failed_pregnancies, na.rm = TRUE),
-    pct_mastitis = mean(mastitis, na.rm = TRUE),
-    pct_lameness = mean(lameness, na.rm = TRUE),
-    avg_age_at_calving = mean(age_at_calving, na.rm = TRUE)
+    # pct_mastitis = mean(mastitis, na.rm = TRUE),
+    # pct_lameness = mean(lameness, na.rm = TRUE),
+    # avg_age_at_calving = mean(age_at_calving, na.rm = TRUE)
   )
 
 # --- Extract SHAP values from the RSF to identify which variables increase each individual cow's risk score ---
@@ -288,8 +278,8 @@ cow_survival_clean %>%
 # Create a smaller model to calculate SHAP values
 rsf_model <- ranger(
   formula = surv_obj ~ total_milk_production + n_insem + n_failed_pregnancies +
-    insem_failed_interaction + age_at_calving + mastitis + fertility_issues + lameness,
-  data = cow_survival,
+    insem_failed_interaction + age_at_calving,
+  data = fm5_cow_survival,
   mtry = 3,
   importance = "permutation",
   num.trees = 500,
@@ -306,10 +296,10 @@ registerDoParallel(cl)
 set.seed(42) # reproducibility
 
 # Define predictor variable names (same as in the RSF model)
-ids <- cow_survival$AniLifeNumber
-predictors <- c("total_milk_production", "n_insem", "n_failed_pregnancies", "insem_failed_interaction", "age_at_calving", "mastitis", "fertility_issues", "lameness")
+ids <- fm5_cow_survival$AniLifeNumber
+predictors <- c("total_milk_production", "n_insem", "n_failed_pregnancies", "insem_failed_interaction", "age_at_calving")
 
-X <- cow_survival %>% select(all_of(predictors))
+X <- fm5_cow_survival %>% select(all_of(predictors))
 
 # quick sanity checks
 stopifnot(setequal(names(X), predictors))
@@ -355,15 +345,14 @@ reason_map <- c(
   "total_milk_production" = "Low milk yield",
   "n_insem"               = "High insemination count",
   "n_failed_pregnancies"  = "Reproduction failure",
-  "age_at_calving"        = "Age at calving",
-  "mastitis"              = "Chronic mastitis",
-  "fertility_issues"      = "Fertility issues",
-  "lameness"              = "Lameness"
+  "age_at_calving"        = "Age at calving"
 )
 
 top_driver <- top_driver %>%
   mutate(est_reason_for_culling = unname(reason_map[variable]))
 
-cow_features <- cow_features %>%
+table(top_driver$est_reason_for_culling)
+
+fm5_cow_features <- fm5_cow_features %>%
   left_join(top_driver %>% select(AniLifeNumber, est_reason_for_culling),
             by = "AniLifeNumber")
