@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------
-# Script: 06_health_analysis.R
+# Script: 03_health_analysis.R
 # Author: Ashley Sanders
 # Date:   2025-09-15
 #
@@ -41,7 +41,7 @@
 
 # Use Farm1 since we don't have reliable statistics from Farm5.
 
-# Do older cows have more (and more costly) health problems, particularly more insemination and pregnancy-related problems?
+# Do older cows have more health problems?
 
 fm1_dairy_health_problems <- dairy_health_problems
 

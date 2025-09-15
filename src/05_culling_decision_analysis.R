@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------
-# Script Name:    04_culling_decision_analysis.R
+# Script Name:    05_culling_decision_analysis.R
 # Project:       Herd Management Strategy
 #
 # Purpose:        Model and analyze factors that predict dairy cow culling

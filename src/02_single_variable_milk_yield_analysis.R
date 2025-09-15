@@ -1,9 +1,67 @@
-# Exploration of individual factors that influence milk production
-# - Age at calving
-# - Lactation duration
-# - Dry-off interval
-# - Interval between calving and artificial insemination
-# - Interval between calvings
+# ------------------------------------------------------------------------------
+# Script: 02_single_variable_milk_yield_analysis.R
+# Purpose: Explore how individual factors relate to total milk production per
+#          lactation cycle and quantify effect sizes / significance.
+#
+# Scope / What this script does
+#   A) Age at calving
+#      - Bin ages (2–10 yrs), check group sizes, means, SD ratio.
+#      - Assumption checks: QQ plot, Shapiro on residuals, Levene’s test.
+#      - Fit one-way ANOVA; fall back to Kruskal–Wallis + Dunn posthoc.
+#      - Boxplots of total milk by age bin.
+#   B) Lactation duration
+#      - Fit linear model: total milk ~ lactation_duration.
+#      - Residual diagnostics: residuals vs duration & vs fitted.
+#      - Scatter + LM smoother.
+#   C) Dry-off interval
+#      - Construct next-cycle yield; bin dry-off days (4-level, then 3-level).
+#      - Spearman correlation (interval vs next yield).
+#      - Kruskal–Wallis + Dunn posthoc between bins.
+#      - Spline LM: next_yield ~ bs(dry_off_interval, …) + age_at_calving + avg_daily_yield.
+#      - Power analysis from ANOVA (eta² → Cohen’s f → achieved power & n for 80%).
+#      - Boxplots of next yield by dry-off bin.
+#      - Contingency analyses linking long dry-off (≥75d) with:
+#          • number of inseminations (collapsed 1 vs >1)
+#          • failed pregnancies (0, 1–2, >2)
+#        → χ² / Fisher tests, BH-adjusted pairwise tests.
+#   D) Calving → first AI interval
+#      - Spearman correlation; LM with age_at_calving covariate.
+#      - Visualization with fitted line.
+#   E) Calving interval
+#      - Scatter + LOESS; mixed-effects model
+#        total_milk_production ~ calving_interval_days + (1 | AniLifeNumber).
+#
+# Inputs (objects expected in the environment)
+#   - fm5_lactation_metrics (per-cycle metrics incl. milk & repro dates)
+#   - combined_lactation_metrics (multi-farm cycles for dry-off → next yield)
+#
+# Key Outputs (produced interactively / to console)
+#   - ANOVA / Kruskal results, Dunn posthoc tables
+#   - Correlations, linear model summaries, mixed-effects summary
+#   - Power estimates (pwr.anova.test)
+#   - ggplots: boxplots and scatter/smoother diagnostics
+#
+# Dependencies
+#   - Packages: car, FSA, rstatix, splines, pwr, RVAideMemoire, lme4,
+#               ggplot2, dplyr, tidyr (assumed loaded upstream), broom (augment)
+#
+# Assumptions / Filters
+#   - Age at calving binned using month thresholds mapped to integer years.
+#   - Drops rows with missing values for the tested variable(s) per section.
+#   - For contingency tests, categories are collapsed to ensure adequate counts;
+#     BH adjustment used for multiple comparisons.
+#
+# How to run
+#   - Ensure fm5_lactation_metrics and combined_lactation_metrics are loaded.
+#   - Source after lactation metrics construction and cleaning steps.
+#
+# Repro tips
+#   - Set a seed before simulated p-values in Fisher tests:
+#       set.seed(123)
+#   - Save model objects if re-used later:
+#       saveRDS(list(fit, lm_lac_dur, fit3, fit4, m1), "models/yield_models.rds")
+# ------------------------------------------------------------------------------
+
 
 library(car)
 library(FSA)
