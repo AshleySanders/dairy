@@ -1,4 +1,11 @@
-# Compare Lely milk production data to invoice data and ensure accurate calculations for each cow as the foundation of per cow profitability calculations based on milk production.
+# ------------------------------------------------------------------------------
+# Script: lely_milk_prod_invoices.R
+# Purpose: Compare Lely production data to invoice revenue to validate per-cow
+#          profitability inputs and monthly aggregates.
+# Notes:   Pulls lean tables from Lely DB, aggregates monthly sales, and joins
+#          with delivered milk volumes for cross-checks.
+# ------------------------------------------------------------------------------
+
 
 library(dplyr)
 library(lubridate)

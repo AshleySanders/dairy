@@ -1,14 +1,12 @@
-# Title: Missing Milk Production Data Analysis
-# Description: This script analyzes missing milk production data for cows that have calved but do not have milk production records post-calving. It joins various datasets, cleans the data, and identifies cows with missing milk records after calving, along with their exit information.
-# Author: Ashley Sanders
-# Created: 2024-06-24
-# Updated: 2024-06-24
-# Inputs:
-#   - Lely SQL database tables created in munge/01_save_sql_tables.R
-#   - Local CSV: missing_milk_after_calving.csv
-# Outputs:
-#   - Final data frame: missing_milk_with_exit
-#   - Optional CSV export for review
+# ------------------------------------------------------------------------------
+# Script: missing_lactation_data.R
+# Purpose: Identify cows with missing milk production data after calving by
+#          joining lactation, milk, and animal exit data. Includes diagnostics
+#          for dry-off dates, lactation length, and calving-to-insemination
+#          intervals.
+# Notes:   Focused on Farm1 after Lely installation (2016–2023).
+# ------------------------------------------------------------------------------
+
 
 
 # Load libraries

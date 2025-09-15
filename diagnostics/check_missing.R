@@ -1,3 +1,8 @@
+# ------------------------------------------------------------------------------
+# Script: check_missing.R
+# Purpose: Utility to report missing values (NA or "") for each variable in a df.
+# Notes:  Outputs counts and percentages of missing data, sorted descending.
+# ------------------------------------------------------------------------------
 
 
 # Identify missing values that are NA or ""

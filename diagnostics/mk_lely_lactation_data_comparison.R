@@ -1,6 +1,11 @@
-# Compare Mil'Klic data with lactation data calculated from Lely Milk Day Production table.
-
-# Lactation cycle number comparison
+# ------------------------------------------------------------------------------
+# Script: mk_lely_lactation_data_comparison.R
+# Purpose: Compare lactation cycle information between Mil'Klic records and Lely-
+#          derived lactation data. Validates cycle counts, start dates, and total
+#          milk production per cow, and identifies mismatches across systems.
+# Notes:   Focused on Farm1 (customer_id = "16450bc2-f930-4052-a3f7-a602646e64cc")
+#          up to 2024-09-19. Includes ID cleaning and consistency checks.
+# ------------------------------------------------------------------------------
 
 # Function to clean AniLifeNumber so that it matches the format of national_number/animal from Supabase tables
 clean_ani <- function(x) str_replace_all(str_trim(as.character(x)), " ", "")

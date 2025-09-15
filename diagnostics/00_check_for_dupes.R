@@ -1,3 +1,10 @@
+# ------------------------------------------------------------------------------
+# Script: check_duplicates.R
+# Purpose: Utility to check for duplicate AniLifeNumber keys in key farm tables.
+# Notes:  Calls `check_dups()` on multiple datasets and reports counts of dupes.
+# ------------------------------------------------------------------------------
+
+
 check_dups <- function(df, name) {
   df %>%
     mutate(AniLifeNumber = clean_ani(AniLifeNumber)) %>%

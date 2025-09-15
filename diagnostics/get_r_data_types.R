@@ -1,3 +1,10 @@
+# ------------------------------------------------------------------------------
+# Script: get_r_data_types.R
+# Purpose: Utility to inspect a DB table, infer R data types, and copy results.
+# Notes:  Pulls 1 row to detect types; optionally copies summary to clipboard.
+# ------------------------------------------------------------------------------
+
+
 # Check Missing Values and Data Types in a Database Table
 
 # Load libraries
