@@ -1,16 +1,37 @@
-# Description: The goal of this script is to create the table with all outcome variables to gauge the profitability of herd management strategies per farm.
+# ------------------------------------------------------------------------------
+# Script Name:    06_cow_outcomes_construction.R
+# Project:        Cockpit Agriculture – Herd Management Strategy
+# Purpose:        Prototype script to construct outcome variables for evaluating
+#                 profitability of herd management strategies per farm.
+#
+# Status:         ⚠️ Incomplete — not enough cost data available.
+#                 This script is **not production-ready** and may error if run.
+#
+# Description:    Creates a preliminary `cow_outcomes` table by combining
+#                 features (avg daily yield, lactation duration, birth year)
+#                 with lifetime milk production summaries. Intended as a
+#                 foundation for profitability analysis once full cost
+#                 data (feed, vet, labor, etc.) are available.
+#
+# Notes:          - Do NOT rely on outputs for analysis yet.
+#                 - Future work: add cost data, refine outcome measures
+#                   (profit/loss per cow, marginal returns by strategy).
+#                 - Safe to keep in repo, but should not auto-execute
+#                   until completed.
+#
+# Inputs:
+#   - cow_features (from `munge/02_cow_features_construction.R`)
+#   - full_milk_by_cow (monthly conserved milk table)
+#   - animals_slaughter_farm1 (slaughter metadata)
+#
+# Outputs (provisional):
+#   - cow_outcomes.rds (not yet finalized schema)
+#
+# Author:         Ashley Sanders
+# Created:        2025-06-26
+# Modified:       2025-07-30
+# ------------------------------------------------------------------------------
 
-# ProjectTemplate auto-executes this on load, so avoid reloading data unnecessarily
-
-
-# --- Load Required Packages ---
-library(dplyr)
-library(lubridate)
-library(stringr)
-
-# ---Data
-# Use the milk_cows table already created in munge/01_save_sql_tables.R. This table is a join between MilkDayProduction table from Lely and HemAnimal table from Lely.
-# Use the full_milk_by_cow table, which calculates the monthly milk production that is conserved for each cow.
 
 # Load the cow_features table created in munge/02_cow_features_construction.R
 cow_features <- readRDS(here::here("data", "cow_features.rds"))

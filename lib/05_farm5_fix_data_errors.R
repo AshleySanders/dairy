@@ -1,3 +1,24 @@
+# ------------------------------------------------------------------------------
+# Script Name:    05_farm5_fix_data_errors.R
+# Project:        Cockpit Agriculture – Herd Management Strategy
+# Purpose:        Correct missing or erroneous identifiers and birth information
+#                 in Farm 5 datasets to ensure consistency across joins.
+#
+# Description:    This script:
+#                 - Fixes missing country codes in AniLifeNumber (fm5_lactation_summary)
+#                 - Resolves cows with missing AniBirthday and AniMotherLifeNumber
+#                 - Corrects birth_year in fm5_cow_features
+#                 - Removes a non-existent cow from fm5_lactation_metrics
+#
+# Notes:          - Only used for Farm 5
+#                 - Must be sourced *after* loading raw Lely/Supabase tables
+#                 - Re-save corrected datasets to cache after running
+#
+# Author:         Ashley Sanders
+# Created:        2025-09-15
+# ------------------------------------------------------------------------------
+
+
 # Fix the missing country codes in AniLifeNumber in fm5_lactation_ummary => fm5_lactation_metrics
 
 fm5_lactation_summary <- fm5_lactation_summary %>%

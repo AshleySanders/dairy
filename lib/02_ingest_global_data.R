@@ -1,4 +1,29 @@
-# 02_ingest_global_data.R
+# ------------------------------------------------------------------------------
+# Script Name:    02_ingest_global_data.R
+# Project:        Dairy Herd Management Strategy
+# Purpose:        Ingest and cache global-level data tables from Supabase
+#
+# Usage Notes:
+#   - This script should be run manually or during initial project setup to
+#     ensure that the key Supabase reference tables are available in cache.
+#   - Do NOT place this script in `munge/`, as it should not re-run at each
+#     call to `load.project()`.
+#
+# Inputs:
+#   - Live SQL connection to `prod` (Supabase)
+#
+# Outputs (cached R objects):
+#   - animals_history
+#   - animals
+#   - animals_slaughter
+#   - milk_invoice
+#   - gl_entries
+#
+# Author:         Ashley Sanders
+# Created:        2025-06-25
+# Last updated:   2025-09-15
+# ------------------------------------------------------------------------------
+
 
 # Save animals_history table from Supabase for later use
 
