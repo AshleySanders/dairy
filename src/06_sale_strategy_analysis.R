@@ -30,15 +30,6 @@
 #   - Assumes dressing % = 50% for live weight estimation.
 # ------------------------------------------------------------------------------
 
-# Load necessary libraries
-library(mgcv)
-library(car)
-library(randomForest)
-library(rpart)
-library(rpart.plot)
-library(caret)
-
-
 # Load and prepare data
 
 last_milking_weight <- read.csv(here("data", "last_milking_weight.csv")) # Generated in VSC

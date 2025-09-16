@@ -35,11 +35,6 @@
 
 # Load necessary libraries
 
-library(readr)
-library(dplyr)
-library(lubridate)
-library(ggplot2)
-
 # The following two datasets are the results of SQL queries in VSC
 
 mdp <- read.csv(here("data", "mdp_monthly_milk_production_by_cow.csv"))

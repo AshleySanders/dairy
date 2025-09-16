@@ -58,9 +58,6 @@
 
 
 # --- Defining a "normal" cow life cycle on the farm. ---
-library(rstatix)
-library(ggpubr)
-
 # 1. purchased or raised on the farm ?
 table(fm5_cow_features$entry_code)
 

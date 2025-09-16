@@ -7,12 +7,14 @@ recursive_loading: FALSE
 munging: TRUE
 logging: FALSE
 logging_level: INFO
-load_libraries: FALSE
-libraries: here, reshape2, dplyr, tidyverse, stringr, lubridate
-as_factors: FALSE
+load_libraries: TRUE
+libraries: here, reshape2, dplyr, tidyverse, stringr, lubridate, ProjectTemplate
+as_factors: TRUE
 tables_type: tibble
 attach_internal_libraries: FALSE
 cache_loaded_data:  TRUE
 sticky_variables: NONE
 underscore_variables: TRUE
 cache_file_format: RData
+seed: 123
+encoding: UTF-8

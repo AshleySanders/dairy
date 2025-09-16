@@ -6,10 +6,6 @@
 #          with delivered milk volumes for cross-checks.
 # ------------------------------------------------------------------------------
 
-
-library(dplyr)
-library(lubridate)
-
 # Create a lean dataframe from PrmDeviceVisit
 device_visit <- dbGetQuery(lely, "
   SELECT

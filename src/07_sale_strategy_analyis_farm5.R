@@ -28,21 +28,9 @@
 #   - Requires pre-cleaned cow_features and last_milking_weight data.
 #   - Assumes dressing % = 50% for live weight estimation.
 # ------------------------------------------------------------------------------
-
-# Load necessary libraries
-library(mgcv)
-library(car)
-library(randomForest)
-library(rpart)
-library(rpart.plot)
-library(caret)
-
-
 # Load and prepare data
 
-# Note that last_milking_weight is not available for farm5
-
-# As of 2025-09-03
+# Note that last_milking_weight is not available for farm5 as of 2025-09-03
 
 fm5_cow_sales <- fm5_cow_features %>%
   select(AniLifeNumber, AniBirthday, age_at_exit, exit_date, exit_code, slaughter_date, weight, birth_year, cohort, endmilk_to_exit_days, selling_price, classification, category.x) %>%

@@ -202,7 +202,6 @@ summary(m_panel)
 #-------------------------------------------------------------------------------
 # Plot fitted probabilities across ages
 
-library(ggeffects)
 pred <- ggpredict(m_panel, terms = "age_year [all]")
 
 plot(pred) +

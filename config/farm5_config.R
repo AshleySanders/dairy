@@ -9,8 +9,8 @@ lely <- dbConnect(odbc(),
                   Driver = "ODBC Driver 17 for SQL Server",
                   Server = "localhost,1433",
                   Database = "Lely_Marais",
-                  UID = "sa",
-                  PWD = "1tsMyL1feNow",
+                  UID = Sys.getenv("ODBC_UID"),
+                  PWD = Sys.getenv("ODBC_PW"),
                   Port = 1433)
 
 # Explicitly load .Renviron if not already loaded

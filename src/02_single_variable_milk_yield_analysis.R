@@ -62,14 +62,6 @@
 #       saveRDS(list(fit, lm_lac_dur, fit3, fit4, m1), "models/yield_models.rds")
 # ------------------------------------------------------------------------------
 
-
-library(car)
-library(FSA)
-library(rstatix)
-library(splines)
-library(pwr)
-library(RVAideMemoire)
-
 # --- Age at Calving ---
 # Split ages of cows into groups
 fm5_lactation_metrics <- fm5_lactation_metrics %>%
@@ -482,7 +474,6 @@ ggplot(df_ci, aes(x = calving_interval_days, y = total_milk_production)) +
 
 # Mixed Effects Model to compare each individual cow's yield from cycle to cycle and its relation to calving intervals
 
-library(lme4)
 m1 <- lmer(
   total_milk_production ~ calving_interval_days + (1 | AniLifeNumber), data = df_ci
 )

@@ -7,13 +7,6 @@
 
 # Check Missing Values and Data Types in a Database Table
 
-# Load libraries
-library(DBI)
-library(glue)
-library(dplyr)
-library(clipr)
-
-
 # Function to get R data types from a database table
 get_r_data_types <- function(prod, table_name, schema = "public", copy_clip = TRUE) {
    # Pull 1 row to infer types

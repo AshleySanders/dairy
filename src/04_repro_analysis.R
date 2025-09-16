@@ -48,10 +48,6 @@
 
 # This script uses the insem_lac_preg dataset from the data folder
 
-library(dplyr)
-library(here)
-here()
-
 # Failed inseminations per cow
 failed_insem_per_cow <- insem_lac_preg %>%
   group_by(AniLifeNumber) %>%
@@ -97,7 +93,6 @@ repro_efficiency <- insem_lac_preg %>%
 View(repro_efficiency)
 
 # Visualize the reproductive efficiency
-library(ggplot2)
 ggplot(repro_efficiency, aes(x = repro_efficiency)) +
   geom_histogram(binwidth = 0.05, fill = "blue", color = "black") +
   labs(title = "Reproductive Efficiency Distribution",

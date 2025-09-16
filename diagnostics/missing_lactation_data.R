@@ -7,16 +7,6 @@
 # Notes:   Focused on Farm1 after Lely installation (2016–2023).
 # ------------------------------------------------------------------------------
 
-
-
-# Load libraries
-library(dplyr)
-library(tidyverse)
-library(lubridate)
-library(stringr)
-
-
-
 # Join lactation data to milk records by cow ID (not yet filtered by lactation period)
 lactation_milk <- lactation %>%
   filter(LacNumber > 0, !is.na(LacCalvingDate)) %>%
