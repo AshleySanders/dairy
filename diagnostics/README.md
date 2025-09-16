@@ -1,83 +1,70 @@
-# Diagnostics Scripts
+# Diagnostics Directory
 
-This folder contains diagnostic and validation scripts used to check, clean, and cross-verify dairy herd datasets (Lely SQL, Mil’Klic Supabase, farm accounting data).  
-Each script focuses on a specific aspect of data integrity or reconciliation to ensure that downstream analyses are based on consistent and reliable inputs.
+This folder contains **quality assurance (QA) and diagnostic scripts** used to validate data integrity, reconcile inconsistencies, and cross-check results across systems.  
+These scripts are **not part of the core modeling pipeline** but provide important transparency and confidence in the data preparation process.
 
 ---
 
 ## Scripts Overview
 
-### 00_check_for_dupes.R
-- **Purpose:** Detect duplicate cow IDs (`AniLifeNumber`) across key derived tables.  
-- **Checks:** Reports duplicated keys by table and provides counts.  
-- **Use:** Ensures primary keys are unique before merging datasets.
+### 1. `check_duplicates.R`
+- **Purpose**: Utility to check for duplicate `AniLifeNumber` keys in key farm tables.
+- **Notes**: Calls `check_dups()` on multiple datasets and reports counts of duplicates.
 
----
+### 2. `01_check_farm_births_by_calving_match.R`
+- **Purpose**: Validate whether calf birthdates match mother calving dates.
+- **Inputs**: `lactation_animal` and `animals_meta_farm1` (from cache).
+- **Outputs**: Table of mother–calf pairs with calving–birth proximity.
+- **Notes**: Used for QA only; not for feature creation.
 
-### check_farm_births_by_calving_match.R
-- **Purpose:** Verify consistency between farm birth records and calving data.  
-- **Checks:** Flags mismatches between reported births and actual calving cycles.  
-- **Use:** Helps confirm herd entry assumptions.
+### 3. `check_missing.R`
+- **Purpose**: Report missing values (NA or `""`) for each variable in a dataframe.
+- **Outputs**: Counts and percentages of missing data, sorted descending.
 
----
+### 4. `get_r_data_types.R`
+- **Purpose**: Inspect a database table, infer R data types, and copy results.
+- **Notes**: Pulls one row to detect types; optionally copies summary to clipboard.
 
-### check_missing.R
-- **Purpose:** Summarize missing values across all columns of a given dataframe.  
-- **Checks:** Counts `NA` and empty string values, computes percent missing.  
-- **Use:** Identifies variables needing imputation or special handling.
+### 5. `lely_milk_prod_invoices.R`
+- **Purpose**: Compare Lely production data to invoice revenue to validate per-cow profitability inputs and monthly aggregates.
+- **Notes**: Joins Lely DB tables with invoice sales and delivered milk volumes for cross-checks.
 
----
+### 6. `lely_milk_comparison.R`
+- **Purpose**: Quantify the difference between total and conserved milk reported by Lely across systems.
+- **Inputs**: Multiple CSV datasets of monthly milk production and kept milk estimates.
+- **Outputs**: 
+  - `full_milk_by_cow.csv` (unified dataset of conserved milk by cow)  
+  - `full_milk_monthly` (total monthly yield across cows)  
+  - Summary plot (MDP vs Visit-based differences)
+- **Notes**: Filters partial months; produces unified dataset for modeling and aggregation.
 
-### get_r_data_types.R
-- **Purpose:** Inspect database table structures and map SQL fields to R data types.  
-- **Checks:** Returns a summary table of variables and inferred R data classes.  
-- **Use:** Supports construction of a data dictionary and schema consistency checks.
+### 7. `missing_lactation_data.R`
+- **Purpose**: Identify cows with missing milk production after calving.
+- **Inputs**: Joins lactation, milk, and animal exit data.
+- **Notes**: Diagnostics for dry-off dates, lactation length, and calving-to-insemination intervals.
 
----
+### 8. `mk_lely_lactation_data_comparison.R`
+- **Purpose**: Compare lactation cycle info between Mil’Klic and Lely-derived data.
+- **Notes**: Validates cycle counts, start dates, and total milk production per cow; identifies mismatches.  
+  Focused on Farm1 up to 2024-09-19.
 
-### lely_milk_prod_invoices.R
-- **Purpose:** Compare Lely-recorded milk production with monthly farm invoices.  
-- **Checks:** Aggregates invoice revenues, joins with milk deliveries, reconciles totals.  
-- **Use:** Foundation for per-cow profitability analysis.
-
----
-
-### mdp_visit_monthly_milk_prod_by_cow.R
-- **Purpose:** Summarize Lely `PrmMilkDayProduction` data to monthly cow-level production.  
-- **Checks:** Links daily visits to monthly totals.  
-- **Use:** Inputs for longitudinal milk yield analyses.
-
----
-
-### missing_lactation_data.R
-- **Purpose:** Identify missing lactation records, dry-off dates, or calving intervals.  
-- **Checks:** Counts cows with incomplete lactation data, joins with exit info.  
-- **Use:** Ensures lactation-cycle completeness before survival or profitability analyses.
-
----
-
-### mk_lely_lactation_data_comparison.R
-- **Purpose:** Compare lactation cycle information between Mil’Klic and Lely-derived datasets.  
-- **Checks:** Validates cycle counts, start dates, total production; flags mismatches.  
-- **Use:** Confirms consistency across external and internal sources (Farm1, up to 2024-09-19).
-
----
-
-### multiple_entries_exits.R
-- **Purpose:** Detect cows with more than one recorded entry or exit event.  
-- **Checks:** Lists duplicates in entry/exit tables.  
-- **Use:** Ensures herd history is chronologically consistent.
+### 9. `multiple_entries_exits.R`
+- **Purpose**: Explore entry/exit patterns in `animals_history` to identify multiple entries/exits per cow (possible inter-farm transfers or re-entries).
+- **Inputs**: `animals_history` (from Supabase).
+- **Outputs**: `multiple_entries_exits.csv` plus summary tables of entry/exit code associations.
+- **Notes**: Supports interpretation of missing data and integration across farms.
 
 ---
 
 ## Usage Notes
-- All scripts are standalone and can be run individually for diagnostics.  
-- Dependencies: `dplyr`, `lubridate`, `DBI`, `glue`, `clipr`, `stringr` (check each script for specifics).  
-- Inputs: Derived Lely SQL tables, Mil’Klic Supabase exports, farm financial records.  
-- Outputs: Summaries, mismatches, and optional CSVs for further inspection.  
+- These scripts are **standalone diagnostics**: run them directly to investigate issues.
+- They may require data from `cache/` or raw SQL extracts in `data/`.  
+- Outputs are typically **CSV summaries and plots** saved locally for inspection.  
+- Results from diagnostics are **not consumed by the modeling pipeline** but guide cleaning decisions and provide an audit trail.
 
 ---
 
-## Maintenance
-- Keep metadata headers in each script consistent (`Script`, `Purpose`, `Notes`).  
-- Update this README when adding or significantly revising diagnostic scripts.  
+## Best Practices
+- Run diagnostics after major ETL steps to confirm data integrity.  
+- Use outputs to document assumptions or decisions in `DECISIONS.md`.  
+- When adding new diagnostics, include a metadata block and update this README.

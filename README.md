@@ -1,5 +1,3 @@
-# dairy
-
 # 🐄 Dairy Herd Management Strategy Analysis
 
 This project analyzes dairy herd productivity and lifecycle patterns using milking machine data, herd records, and slaughter/exit data. The goal is to generate actionable insights into herd management strategies that drive profitability and sustainability across multiple farms.
@@ -19,15 +17,60 @@ This project analyzes dairy herd productivity and lifecycle patterns using milki
 <pre>## 📁 Project Structure (ProjectTemplate format)
 
 ```dairy/
-├── data/ # Final output datasets (e.g., cow_features.rds)
-├── cache/ # Intermediate .rds objects for performance
-├── munge/ # Scripts to load, clean, and engineer data
-│ ├── 01_save_sql_tables.R
-│ └── 02_cow_features_construction.R
-├── reports/ # Future reporting and visualization outputs
-├── src/ # Optional: helper functions
-├── README.md # Project overview (this file)
-└── .Rproj # RStudio project file```</pre>
+├── 01-load-project.R      # Entry script: choose farm config & load project
+├── dairy.Rproj            # RStudio project file
+│
+├── cache/                 # Derived objects cached for performance
+│                          # (e.g., lactation_metrics, cow_features)
+│
+├── config/                # Farm-specific configs + global project settings
+│   ├── farm1_config.R
+│   ├── farm2_config.R
+│   ├── farm5_config.R
+│   ├── global.dcf
+│   └── README.md
+│
+├── data/                  # Raw input + derived data (CSV/SQL extracts/exports)
+│
+├── diagnostics/           # QA, validation & repair scripts
+│                          # (duplicates, missing data, milk comparisons, etc.)
+│
+├── graphs/                # Plots and visual outputs
+│
+├── lib/                   # Core library scripts
+│   ├── 01-libraries.R
+│   ├── 02_ingest_global_data.R
+│   ├── 03_save_farm_tables.R
+│   ├── 04_farm*_fix_*.R
+│   ├── globals.R
+│   ├── helpers.R
+│   └── README.md
+│
+├── logs/                  # Run logs and debugging outputs
+│
+├── munge/                 # Data preparation scripts
+│   ├── 01_animals_meta_data_creation.R
+│   ├── 02_reproduction_lely.R
+│   ├── 03_lactation_cycle_measures.R
+│   ├── 04_dairy_health_measures.R
+│   ├── 05_cow_features_construction.R
+│   ├── 06_cow_outcomes_construction.R
+│   └── README.md
+│
+├── sql/                   # SQL scripts (Lely queries)
+│
+├── src/                   # Analysis scripts (final models)
+│   ├── 01_cow_summary_analysis.R
+│   ├── 02_single_variable_milk_yield_analysis.R
+│   ├── 03_health_analysis.R
+│   ├── 04_repro_analysis.R
+│   ├── 05_culling_decision_analysis.R
+│   ├── 06_sale_strategy_analysis.R
+│   ├── 07_sale_strategy_analysis_farm5.R
+│   └── README.md
+│
+└── README.md              # Project overview (this file)
+```</pre>
 
 
 ---
@@ -35,7 +78,7 @@ This project analyzes dairy herd productivity and lifecycle patterns using milki
 ## 🛠 Technologies Used
 
 - **R** (with ProjectTemplate)
-- `dplyr`, `lubridate`, `stringr`, `here`
+- `dplyr`, `lubridate`, `stringr`, `here`, etc.
 - SQL queries from Lely milking machine database
 - SQL herd history tables
 - Git/GitHub for version control
@@ -55,18 +98,18 @@ This project analyzes dairy herd productivity and lifecycle patterns using milki
 ## ✅ Current Status
 
 - [x] Core SQL tables loaded (milk production, animal identity, lactation)
-- [x] `cow_features` table built (milk + status + lifecycle)
+- [x] `cow_features` table built (milk + status + lifecycle) for two farms
 - [x] Slaughter records integrated and used to patch missing exit data
-- [ ] `cow_outcomes` table (outcome metrics like yield persistence) — coming next
-- [ ] Mil’Klic reproduction data — pending scraping
+- [x] Analysis of farm features complete for Farm1 & Farm5 plus some comparisons
+- [x] Prepare herd-level summaries for strategy benchmarking
+- [x] Model decisions and outcomes
+- [ ] `cow_outcomes` table (outcome metrics like yield persistence)
 
 ---
 
 ## Next Steps
 
 - Create `cow_outputs` table for yield, lifecycle, and persistency segmentation
-- Incorporate reproduction history from Mil'Klic (once scraped)
-- Prepare herd-level summaries for strategy benchmarking
 - Model herd profitability and decision outcomes
 
 ---
